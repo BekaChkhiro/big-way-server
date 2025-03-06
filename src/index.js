@@ -36,9 +36,7 @@ const app = express();
 
 // CORS Configuration
 const whitelist = [
-  'http://localhost:3000',
-  'https://car-marketplace-favv.onrender.com',
-  process.env.FRONTEND_URL
+  process.env.FRONTEND_URL,
 ].filter(Boolean); // Remove any undefined values
 
 const corsOptions = {
