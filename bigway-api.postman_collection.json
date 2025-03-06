@@ -1,0 +1,198 @@
+{
+  "info": {
+    "name": "Big Way API",
+    "description": "Collection for testing the Big Way car dealership API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"username\": \"testuser\",\n\t\"email\": \"test@example.com\",\n\t\"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"email\": \"test@example.com\",\n\t\"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/profile"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cars",
+      "item": [
+        {
+          "name": "Get All Cars",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/cars?page=1&limit=10&sort=created_at&order=DESC",
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "sort",
+                  "value": "created_at"
+                },
+                {
+                  "key": "order",
+                  "value": "DESC"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Cars",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/cars/search?q=BMW&brand_id=1&year_min=2020",
+              "query": [
+                {
+                  "key": "q",
+                  "value": "BMW"
+                },
+                {
+                  "key": "brand_id",
+                  "value": "1"
+                },
+                {
+                  "key": "year_min",
+                  "value": "2020"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Car by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/cars/1"
+          }
+        },
+        {
+          "name": "Create Car",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"brand_id\": 1,\n\t\"category_id\": 2,\n\t\"model\": \"Test Model\",\n\t\"year\": 2023,\n\t\"price\": 50000,\n\t\"description\": \"Test car description\",\n\t\"engine_type\": \"Gasoline\",\n\t\"transmission\": \"Automatic\",\n\t\"fuel_type\": \"Gasoline\",\n\t\"mileage\": 0,\n\t\"engine_size\": 2.0,\n\t\"horsepower\": 200,\n\t\"doors\": 4,\n\t\"color\": \"Black\",\n\t\"body_type\": \"Sedan\",\n\t\"city\": \"Test City\",\n\t\"state\": \"Test State\",\n\t\"country\": \"Test Country\"\n}"
+            },
+            "url": "{{baseUrl}}/api/cars"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wishlist",
+      "item": [
+        {
+          "name": "Get Wishlist",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wishlist"
+          }
+        },
+        {
+          "name": "Add to Wishlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wishlist/1"
+          }
+        },
+        {
+          "name": "Remove from Wishlist",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/wishlist/1"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "authToken",
+      "value": "your_jwt_token_here"
+    }
+  ]
+}
