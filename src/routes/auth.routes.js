@@ -57,43 +57,58 @@ const authMiddleware = require('../middlewares/auth.middleware');
  */
 router.post('/register', async (req, res) => {
   try {
+    console.log('Registration request received:', req.body);
     const { username, email, password } = req.body;
     
     // Validate input
     if (!username || !email || !password) {
+      console.log('Validation failed: Missing required fields');
       return res.status(400).json({ 
         message: 'Validation failed',
         error: 'All fields (username, email, password) are required' 
       });
     }
 
-    // Validate password
-    if (typeof password !== 'string') {
-      return res.status(400).json({ 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.log('Validation failed: Invalid email format');
+      return res.status(400).json({
         message: 'Validation failed',
-        error: 'Password must be a string'
-      });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({ 
-        message: 'Validation failed',
-        error: 'Password must be at least 6 characters long'
+        error: 'Invalid email format'
       });
     }
 
     // Check if user already exists
     const existingUser = await UserModel.findByEmail(email);
     if (existingUser) {
+      console.log('Registration failed: Email already exists');
       return res.status(400).json({ message: 'Email already registered' });
     }
 
+    // Create user
     const user = await UserModel.create({ username, email, password });
-    res.status(201).json({ message: 'Registration successful', user });
+    console.log('User registered successfully:', { id: user.id, email: user.email });
+
+    // Generate JWT token for immediate login
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.status(201).json({ 
+      message: 'Registration successful',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email
+      }
+    });
   } catch (error) {
     console.error('Registration error:', error);
-    const statusCode = error.message === 'Password must be a non-empty string' ? 400 : 500;
-    res.status(statusCode).json({ 
+    res.status(500).json({ 
       message: 'Registration failed', 
       error: error.message 
     });
