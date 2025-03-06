@@ -35,17 +35,38 @@ if (process.env.NODE_ENV !== 'production') {
 const app = express();
 
 // CORS Configuration
+const whitelist = [
+  'http://localhost:3000',
+  'https://car-marketplace-favv.onrender.com',
+  process.env.FRONTEND_URL
+].filter(Boolean); // Remove any undefined values
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (whitelist.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'csrf-token', 'x-csrf-token'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   exposedHeaders: ['Content-Range', 'X-Total-Count'],
-  maxAge: 86400 // Cache preflight request results for 24 hours (in seconds)
+  maxAge: 86400
 };
 
-// Middleware
+// Apply CORS before other middleware
 app.use(cors(corsOptions));
+
+// Enable pre-flight requests for all routes
+app.options('*', cors(corsOptions));
+
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
