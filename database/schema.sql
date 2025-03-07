@@ -1,7 +1,9 @@
 -- Create custom enum type for user roles
 CREATE TYPE user_role AS ENUM ('user', 'admin');
--- Create custom enum type for gender
-CREATE TYPE user_gender AS ENUM ('male', 'female', 'other');
+
+-- Drop existing gender type if exists and recreate
+DROP TYPE IF EXISTS user_gender CASCADE;
+CREATE TYPE user_gender AS ENUM ('male', 'female');
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (

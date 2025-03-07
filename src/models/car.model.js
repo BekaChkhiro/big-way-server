@@ -5,6 +5,24 @@ class CarModel {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Validate brand_id exists
+      const brandResult = await client.query(
+        'SELECT id FROM brands WHERE id = $1',
+        [carData.brand_id]
+      );
+      if (brandResult.rows.length === 0) {
+        throw new Error('Invalid brand_id: Brand does not exist');
+      }
+
+      // Validate category_id exists
+      const categoryResult = await client.query(
+        'SELECT id FROM categories WHERE id = $1',
+        [carData.category_id]
+      );
+      if (categoryResult.rows.length === 0) {
+        throw new Error('Invalid category_id: Category does not exist');
+      }
       
       // Create specification first
       const specResult = await client.query(
@@ -406,16 +424,17 @@ class CarModel {
 
       // Insert new images
       for (let i = 0; i < images.length; i++) {
+        const { original, thumbnail, medium, large } = images[i];
         await client.query(
           `INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url, is_primary)
           VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             carId,
-            images[i].original,
-            images[i].thumbnail,
-            images[i].medium,
-            images[i].large,
-            i === 0
+            original,
+            thumbnail,
+            medium,
+            large,
+            i === 0  // first image is primary
           ]
         );
       }

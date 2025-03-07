@@ -129,12 +129,12 @@ router.post('/register', async (req, res) => {
     }
 
     // Validate gender
-    const validGenders = ['male', 'female', 'other'];
+    const validGenders = ['male', 'female'];
     if (!validGenders.includes(gender)) {
       console.log('Validation failed: Invalid gender value');
       return res.status(400).json({ 
         message: 'Validation failed',
-        error: 'Invalid gender value' 
+        error: 'Gender must be either male or female' 
       });
     }
 

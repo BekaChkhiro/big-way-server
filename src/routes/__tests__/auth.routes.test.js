@@ -6,7 +6,12 @@ describe('Auth Routes', () => {
   const testUser = {
     username: 'testuser',
     email: 'test@example.com',
-    password: 'password123'
+    password: 'password123',
+    first_name: 'Test',
+    last_name: 'User',
+    age: 25,
+    gender: 'male',
+    phone: '+995599555555'
   };
 
   beforeEach(async () => {
@@ -24,7 +29,23 @@ describe('Auth Routes', () => {
       expect(response.body).toHaveProperty('message', 'Registration successful');
       expect(response.body.user).toHaveProperty('username', testUser.username);
       expect(response.body.user).toHaveProperty('email', testUser.email);
+      expect(response.body.user).toHaveProperty('gender', testUser.gender);
       expect(response.body.user).not.toHaveProperty('password');
+    });
+
+    it('should not register user with invalid gender', async () => {
+      const invalidUser = {
+        ...testUser,
+        gender: 'other'
+      };
+
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send(invalidUser)
+        .expect(400);
+
+      expect(response.body).toHaveProperty('message', 'Validation failed');
+      expect(response.body).toHaveProperty('error', 'Gender must be either male or female');
     });
 
     it('should not register user with existing email', async () => {
@@ -66,7 +87,7 @@ describe('Auth Routes', () => {
         })
         .expect(401);
 
-      expect(response.body).toHaveProperty('message', 'Invalid credentials');
+      expect(response.body).toHaveProperty('message', 'Authentication failed');
     });
   });
 });

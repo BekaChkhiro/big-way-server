@@ -2,6 +2,7 @@ const router = require('express').Router();
 const CarModel = require('../models/car.model');
 const authMiddleware = require('../middlewares/auth.middleware');
 const { upload, processAndUpload, setCacheHeaders } = require('../middlewares/upload.middleware');
+const pool = require('../../config/db.config');
 
 /**
  * @swagger
@@ -167,6 +168,45 @@ router.get('/', async (req, res) => {
 
 /**
  * @swagger
+ * /api/cars/brands:
+ *   get:
+ *     summary: Get all car brands
+ *     tags: [Cars]
+ *     responses:
+ *       200:
+ *         description: List of car brands
+ */
+router.get('/brands', async (req, res) => {
+  try {
+    const brands = await CarModel.getBrands();
+    res.json(brands);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching brands', error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/cars/categories:
+ *   get:
+ *     summary: Get all car categories
+ *     tags: [Cars]
+ *     responses:
+ *       200:
+ *         description: List of car categories
+ */
+router.get('/categories', async (req, res) => {
+  try {
+    const query = 'SELECT * FROM categories ORDER BY name ASC';
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching categories', error: error.message });
+  }
+});
+
+/**
+ * @swagger
  * /api/cars/search:
  *   get:
  *     summary: Advanced search for cars
@@ -313,11 +353,77 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const carData = req.body;
+    let carData = { ...req.body };
+    
+    // If specifications are nested, flatten them into the main object
+    if (carData.specifications) {
+      carData = {
+        ...carData,
+        ...carData.specifications
+      };
+      delete carData.specifications;
+    }
+
+    const errors = [];
+    
+    // Required fields validation with specific error messages
+    const requiredFields = {
+      brand_id: { label: 'Brand ID', type: 'number' },
+      category_id: { label: 'Category ID', type: 'number' },
+      model: { label: 'Model', type: 'string' },
+      year: { label: 'Year', type: 'number' },
+      price: { label: 'Price', type: 'number' },
+      city: { label: 'City', type: 'string' },
+      state: { label: 'State', type: 'string' },
+      country: { label: 'Country', type: 'string' }
+    };
+
+    // Check for missing fields and type validation
+    for (const [field, config] of Object.entries(requiredFields)) {
+      if (!carData[field]) {
+        errors.push(`${config.label} is required`);
+      } else if (typeof carData[field] !== config.type) {
+        errors.push(`${config.label} must be a ${config.type}`);
+      }
+    }
+
+    // Additional validations for specific fields
+    if (carData.year && (carData.year < 1900 || carData.year > new Date().getFullYear() + 1)) {
+      errors.push('Year must be between 1900 and ' + (new Date().getFullYear() + 1));
+    }
+
+    if (carData.price && carData.price <= 0) {
+      errors.push('Price must be a positive number');
+    }
+
+    // If there are any validation errors, return them all at once
+    if (errors.length > 0) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: errors
+      });
+    }
+
     const car = await CarModel.create(carData, req.user.id);
     res.status(201).json(car);
   } catch (error) {
-    res.status(500).json({ message: 'Error creating car listing', error: error.message });
+    // Handle specific database errors
+    if (error.message.includes('Brand does not exist')) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        error: 'Selected brand does not exist'
+      });
+    }
+    if (error.message.includes('Category does not exist')) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        error: 'Selected category does not exist'
+      });
+    }
+    res.status(500).json({ 
+      message: 'Error creating car listing', 
+      error: error.message 
+    });
   }
 });
 
@@ -359,6 +465,14 @@ router.post('/:id/images', authMiddleware, upload.array('images', 10), async (re
   try {
     const carId = req.params.id;
     
+    // Check if files were provided
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ 
+        message: 'No images provided',
+        error: 'At least one image file is required'
+      });
+    }
+
     // Check car ownership
     const car = await CarModel.findById(carId);
     if (!car || car.seller_id !== req.user.id) {
@@ -372,7 +486,11 @@ router.post('/:id/images', authMiddleware, upload.array('images', 10), async (re
     const updatedCar = await CarModel.addImages(carId, processedImages);
     res.json(updatedCar);
   } catch (error) {
-    res.status(500).json({ message: 'Error uploading images', error: error.message });
+    console.error('Image upload error:', error);
+    res.status(500).json({ 
+      message: 'Error uploading images', 
+      error: error.message 
+    });
   }
 });
 
