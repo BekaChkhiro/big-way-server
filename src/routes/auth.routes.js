@@ -20,6 +20,11 @@ const authMiddleware = require('../middlewares/auth.middleware');
  *               - username
  *               - email
  *               - password
+ *               - first_name
+ *               - last_name
+ *               - age
+ *               - gender
+ *               - phone
  *             properties:
  *               username:
  *                 type: string
@@ -32,6 +37,21 @@ const authMiddleware = require('../middlewares/auth.middleware');
  *                 type: string
  *                 format: password
  *                 example: password123
+ *               first_name:
+ *                 type: string
+ *                 example: John
+ *               last_name:
+ *                 type: string
+ *                 example: Doe
+ *               age:
+ *                 type: integer
+ *                 example: 25
+ *               gender:
+ *                 type: string
+ *                 example: male
+ *               phone:
+ *                 type: string
+ *                 example: +995599123456
  *     responses:
  *       201:
  *         description: User successfully registered
@@ -52,20 +72,30 @@ const authMiddleware = require('../middlewares/auth.middleware');
  *                       type: string
  *                     email:
  *                       type: string
+ *                     first_name:
+ *                       type: string
+ *                     last_name:
+ *                       type: string
+ *                     age:
+ *                       type: integer
+ *                     gender:
+ *                       type: string
+ *                     phone:
+ *                       type: string
  *       400:
  *         description: Invalid input or email already registered
  */
 router.post('/register', async (req, res) => {
   try {
     console.log('Registration request received:', req.body);
-    const { username, email, password } = req.body;
+    const { username, email, password, first_name, last_name, age, gender, phone } = req.body;
     
     // Validate input
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !first_name || !last_name || !age || !gender || !phone) {
       console.log('Validation failed: Missing required fields');
       return res.status(400).json({ 
         message: 'Validation failed',
-        error: 'All fields (username, email, password) are required' 
+        error: 'All fields (username, email, password, first_name, last_name, age, gender, phone) are required' 
       });
     }
 
@@ -79,6 +109,35 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // Validate phone number (Georgian format)
+    const phoneRegex = /^(\+995|0)[5-9]\d{8}$/;
+    if (!phoneRegex.test(phone)) {
+      console.log('Validation failed: Invalid phone number format');
+      return res.status(400).json({ 
+        message: 'Validation failed',
+        error: 'Invalid phone number format' 
+      });
+    }
+
+    // Validate age
+    if (age < 18 || age > 100) {
+      console.log('Validation failed: Invalid age');
+      return res.status(400).json({ 
+        message: 'Validation failed',
+        error: 'Age must be between 18 and 100' 
+      });
+    }
+
+    // Validate gender
+    const validGenders = ['male', 'female', 'other'];
+    if (!validGenders.includes(gender)) {
+      console.log('Validation failed: Invalid gender value');
+      return res.status(400).json({ 
+        message: 'Validation failed',
+        error: 'Invalid gender value' 
+      });
+    }
+
     // Check if user already exists
     const existingUser = await UserModel.findByEmail(email);
     if (existingUser) {
@@ -87,7 +146,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Create user
-    const user = await UserModel.create({ username, email, password });
+    const user = await UserModel.create({ username, email, password, first_name, last_name, age, gender, phone });
     console.log('User registered successfully:', { id: user.id, email: user.email });
 
     // Generate JWT token for immediate login
@@ -103,7 +162,12 @@ router.post('/register', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        age: user.age,
+        gender: user.gender,
+        phone: user.phone
       }
     });
   } catch (error) {

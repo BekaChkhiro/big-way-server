@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 
 class UserModel {
   static async create(userData) {
-    const { username, email, password } = userData;
+    const { username, email, password, first_name, last_name, age, gender, phone } = userData;
     
     // Validate password
     if (!password || typeof password !== 'string') {
@@ -14,13 +14,22 @@ class UserModel {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     const query = `
-      INSERT INTO users (username, email, password)
-      VALUES ($1, $2, $3)
-      RETURNING id, username, email, role, created_at
+      INSERT INTO users (username, email, password, first_name, last_name, age, gender, phone)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at
     `;
     
     try {
-      const result = await pool.query(query, [username, email, hashedPassword]);
+      const result = await pool.query(query, [
+        username, 
+        email, 
+        hashedPassword, 
+        first_name, 
+        last_name, 
+        age, 
+        gender, 
+        phone
+      ]);
       return result.rows[0];
     } catch (error) {
       if (error.code === '23505') { // Unique violation
@@ -37,13 +46,16 @@ class UserModel {
   }
 
   static async findById(id) {
-    const query = 'SELECT id, username, email, role, created_at FROM users WHERE id = $1';
+    const query = `
+      SELECT id, username, email, first_name, last_name, age, gender, phone, role, created_at 
+      FROM users WHERE id = $1
+    `;
     const result = await pool.query(query, [id]);
     return result.rows[0];
   }
 
   static async updateProfile(id, data) {
-    const allowedUpdates = ['username', 'email'];
+    const allowedUpdates = ['username', 'email', 'first_name', 'last_name', 'age', 'gender', 'phone'];
     const updates = [];
     const values = [];
     let counter = 1;
@@ -63,7 +75,7 @@ class UserModel {
       UPDATE users 
       SET ${updates.join(', ')} 
       WHERE id = $${counter}
-      RETURNING id, username, email, role, created_at
+      RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at
     `;
 
     const result = await pool.query(query, values);
