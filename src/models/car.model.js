@@ -651,6 +651,81 @@ class CarModel {
     };
   }
 
+  static async findSimilarCars(carId, limit = 4) {
+    // Get the original car details first
+    const originalCar = await this.findById(carId);
+    if (!originalCar) {
+      throw new Error('Car not found');
+    }
+
+    const query = `
+      SELECT 
+        c.*,
+        json_build_object(
+          'id', s.id,
+          'engine_type', s.engine_type,
+          'transmission', s.transmission,
+          'fuel_type', s.fuel_type,
+          'mileage', s.mileage,
+          'engine_size', s.engine_size,
+          'horsepower', s.horsepower,
+          'doors', s.doors,
+          'color', s.color,
+          'body_type', s.body_type
+        ) as specifications,
+        json_build_object(
+          'id', l.id,
+          'city', l.city,
+          'state', l.state,
+          'country', l.country
+        ) as location,
+        (
+          SELECT json_agg(ci.*)
+          FROM car_images ci
+          WHERE ci.car_id = c.id
+        ) as images,
+        b.name as brand_name,
+        cat.name as category_name
+      FROM cars c
+      LEFT JOIN specifications s ON c.specification_id = s.id
+      LEFT JOIN locations l ON c.location_id = l.id
+      LEFT JOIN brands b ON c.brand_id = b.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      WHERE c.id != $1
+        AND c.status = 'available'
+        AND (
+          c.brand_id = $2
+          OR c.category_id = $3
+          OR (
+            c.price BETWEEN $4 * 0.8 AND $4 * 1.2
+            AND c.year BETWEEN $5 - 2 AND $5 + 2
+          )
+        )
+      GROUP BY c.id, s.id, l.id, b.name, cat.name
+      ORDER BY
+        CASE 
+          WHEN c.brand_id = $2 AND c.category_id = $3 THEN 1
+          WHEN c.brand_id = $2 THEN 2
+          WHEN c.category_id = $3 THEN 3
+          ELSE 4
+        END,
+        ABS(c.price - $4),
+        ABS(c.year - $5)
+      LIMIT $6
+    `;
+
+    const result = await pool.query(query, [
+      carId,
+      originalCar.brand_id,
+      originalCar.category_id,
+      originalCar.price,
+      originalCar.year,
+      limit
+    ]);
+
+    return result.rows;
+  }
+
   static async deleteAll() {
     const query = 'DELETE FROM cars';
     await pool.query(query);

@@ -15,12 +15,21 @@ async function seed() {
 
     // Clear existing data
     await client.query('TRUNCATE users, brands, categories, specifications, locations, cars, car_images, wishlists CASCADE');
+    
+    // Reset sequences
+    await client.query('ALTER SEQUENCE brands_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE categories_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE users_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE cars_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE specifications_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE locations_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE car_images_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE wishlists_id_seq RESTART WITH 1');
 
-    // Seed brands
-    const brandPromises = brands.map(brand => 
-      client.query('INSERT INTO brands (name) VALUES ($1) RETURNING id', [brand.name])
-    );
-    const brandResults = await Promise.all(brandPromises);
+    // Seed brands sequentially
+    for (const brand of brands) {
+      await client.query('INSERT INTO brands (name) VALUES ($1)', [brand.name]);
+    }
     console.log(`✓ Inserted ${brands.length} brands`);
 
     // Seed categories
@@ -34,8 +43,20 @@ async function seed() {
     const userPromises = users.map(async user => {
       const hashedPassword = await bcrypt.hash(user.password, 10);
       return client.query(
-        'INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
-        [user.username, user.email, hashedPassword, user.role || 'user']
+        `INSERT INTO users (username, email, password, role, first_name, last_name, age, gender, phone) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+         RETURNING id`,
+        [
+          user.username, 
+          user.email, 
+          hashedPassword, 
+          user.role || 'user',
+          user.first_name,
+          user.last_name,
+          user.age,
+          user.gender,
+          user.phone
+        ]
       );
     });
     const userResults = await Promise.all(userPromises);

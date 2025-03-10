@@ -531,4 +531,41 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/cars/{id}/similar:
+ *   get:
+ *     summary: Get similar cars based on brand, category, price range, and year
+ *     tags: [Cars]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 4
+ *         description: Number of similar cars to return
+ *     responses:
+ *       200:
+ *         description: List of similar cars
+ *       404:
+ *         description: Car not found
+ */
+router.get('/:id/similar', async (req, res) => {
+  try {
+    const { limit = 4 } = req.query;
+    const similarCars = await CarModel.findSimilarCars(req.params.id, parseInt(limit));
+    res.json(similarCars);
+  } catch (error) {
+    if (error.message === 'Car not found') {
+      return res.status(404).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Error fetching similar cars', error: error.message });
+  }
+});
+
 module.exports = router;
