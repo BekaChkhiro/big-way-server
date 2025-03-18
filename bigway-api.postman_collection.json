@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Big Way API",
-    "description": "Collection for testing the Big Way car dealership API",
+    "description": "Collection for testing the Big Way vehicle dealership API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -58,14 +58,14 @@
       ]
     },
     {
-      "name": "Cars",
+      "name": "Transports",
       "item": [
         {
-          "name": "Get All Cars",
+          "name": "Get All Transports",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/cars?page=1&limit=10&sort=created_at&order=DESC",
+              "raw": "{{baseUrl}}/api/transports?page=1&limit=10&sort=created_at&order=DESC",
               "query": [
                 {
                   "key": "page",
@@ -88,11 +88,11 @@
           }
         },
         {
-          "name": "Search Cars",
+          "name": "Search Transports",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/cars/search?q=BMW&brand_id=1&year_min=2020",
+              "raw": "{{baseUrl}}/api/transports/search?q=BMW&brand_id=1&year_min=2020",
               "query": [
                 {
                   "key": "q",
@@ -111,14 +111,14 @@
           }
         },
         {
-          "name": "Get Car by ID",
+          "name": "Get Transport by ID",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/cars/1"
+            "url": "{{baseUrl}}/api/transports/1"
           }
         },
         {
-          "name": "Create Car",
+          "name": "Create Transport",
           "request": {
             "method": "POST",
             "header": [
@@ -133,9 +133,9 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n\t\"brand_id\": 1,\n\t\"category_id\": 2,\n\t\"model\": \"Test Model\",\n\t\"year\": 2023,\n\t\"price\": 50000,\n\t\"description\": \"Test car description\",\n\t\"engine_type\": \"Gasoline\",\n\t\"transmission\": \"Automatic\",\n\t\"fuel_type\": \"Gasoline\",\n\t\"mileage\": 0,\n\t\"engine_size\": 2.0,\n\t\"horsepower\": 200,\n\t\"doors\": 4,\n\t\"color\": \"Black\",\n\t\"body_type\": \"Sedan\",\n\t\"city\": \"Test City\",\n\t\"state\": \"Test State\",\n\t\"country\": \"Test Country\"\n}"
+              "raw": "{\n\t\"brand_id\": 1,\n\t\"category_id\": 2,\n\t\"model\": \"Test Model\",\n\t\"year\": 2023,\n\t\"price\": 50000,\n\t\"description\": \"Test transport description\",\n\t\"engine_type\": \"Gasoline\",\n\t\"transmission\": \"Automatic\",\n\t\"fuel_type\": \"Gasoline\",\n\t\"mileage\": 0,\n\t\"engine_size\": 2.0,\n\t\"horsepower\": 200,\n\t\"doors\": 4,\n\t\"color\": \"Black\",\n\t\"body_type\": \"Sedan\",\n\t\"city\": \"Test City\",\n\t\"state\": \"Test State\",\n\t\"country\": \"Test Country\"\n}"
             },
-            "url": "{{baseUrl}}/api/cars"
+            "url": "{{baseUrl}}/api/transports"
           }
         }
       ]

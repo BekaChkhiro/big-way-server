@@ -8,7 +8,7 @@ function getPool() {
       host: process.env.DB_HOST || 'localhost',
       port: process.env.DB_PORT || 5432,
       user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
+      password: process.env.DB_PASSWORD || 'Lumia635-',
       database: process.env.NODE_ENV === 'test' ? 'big_way_test_db' : 'big_way_db'
     };
 

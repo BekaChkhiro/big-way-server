@@ -95,4 +95,5 @@ class UserModel {
   }
 }
 
-module.exports = UserModel;
+const User = require('./user');
+module.exports = User;

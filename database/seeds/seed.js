@@ -34,7 +34,10 @@ async function seed() {
 
     // Seed categories
     const categoryPromises = categories.map(category => 
-      client.query('INSERT INTO categories (name) VALUES ($1) RETURNING id', [category.name])
+      client.query(
+        'INSERT INTO categories (name, transport_type) VALUES ($1, $2) RETURNING id', 
+        [category.name, category.transport_type]
+      )
     );
     const categoryResults = await Promise.all(categoryPromises);
     console.log(`✓ Inserted ${categories.length} categories`);
@@ -67,18 +70,32 @@ async function seed() {
       // Insert specification
       const specResult = await client.query(
         `INSERT INTO specifications 
-        (engine_type, transmission, fuel_type, mileage, engine_size, horsepower, doors, color, body_type)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        (engine_type, transmission, fuel_type, mileage, mileage_unit, 
+        engine_size, horsepower, doors, is_turbo, cylinders, 
+        manufacture_month, color, body_type, steering_wheel, drive_type,
+        has_catalyst, airbags_count, interior_material, interior_color)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) 
+        RETURNING id`,
         [
           car.specifications.engine_type,
           car.specifications.transmission,
           car.specifications.fuel_type,
           car.specifications.mileage,
+          car.specifications.mileage_unit || 'km',
           car.specifications.engine_size,
           car.specifications.horsepower,
           car.specifications.doors,
+          car.specifications.is_turbo || false,
+          car.specifications.cylinders,
+          car.specifications.manufacture_month,
           car.specifications.color,
-          car.specifications.body_type
+          car.specifications.body_type,
+          car.specifications.steering_wheel || 'left',
+          car.specifications.drive_type || 'front',
+          car.specifications.has_catalyst !== undefined ? car.specifications.has_catalyst : true,
+          car.specifications.airbags_count || 0,
+          car.specifications.interior_material,
+          car.specifications.interior_color
         ]
       );
 

@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const swaggerUi = require('swagger-ui-express');
 const winston = require('winston');
 const authRoutes = require('./routes/auth.routes');
-const carsRoutes = require('./routes/cars.routes');
+const transportsRoutes = require('./routes/transports.routes');
 const wishlistRoutes = require('./routes/wishlist.routes');
 const specs = require('./docs/swagger');
 const db = require('../config/db.config');
@@ -88,7 +88,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/cars', carsRoutes);
+app.use('/api/transports', transportsRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 
 app.get('/', (req, res) => {
@@ -103,7 +103,7 @@ app.use((err, req, res, next) => {
 
 // Only start the server if this file is run directly
 if (require.main === module) {
-  const PORT = process.env.PORT || 5000;
+  const PORT = 5000;
   
   // Test database connection before starting server
   db.connect()
@@ -113,6 +113,13 @@ if (require.main === module) {
       
       app.listen(PORT, () => {
         logger.info(`Server is running on port ${PORT}`);
+      }).on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+          logger.error(`Port ${PORT} is already in use. Please free up the port and try again.`);
+        } else {
+          logger.error('Error starting server:', error);
+        }
+        process.exit(1);
       });
     })
     .catch(err => {

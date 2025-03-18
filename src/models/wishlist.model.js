@@ -92,4 +92,5 @@ class WishlistModel {
   }
 }
 
-module.exports = WishlistModel;
+const Wishlist = require('./wishlist');
+module.exports = Wishlist;
