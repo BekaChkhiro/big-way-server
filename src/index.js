@@ -103,7 +103,7 @@ app.use((err, req, res, next) => {
 
 // Only start the server if this file is run directly
 if (require.main === module) {
-  const PORT = 5000;
+  const PORT = process.env.PORT || 10000;
   
   // Test database connection before starting server
   db.connect()
