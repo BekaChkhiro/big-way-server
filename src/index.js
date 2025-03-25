@@ -1,16 +1,16 @@
+const dotenv = require('dotenv');
+// Load environment variables first
+dotenv.config();
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const swaggerUi = require('swagger-ui-express');
 const winston = require('winston');
 const authRoutes = require('./routes/auth.routes');
-const transportsRoutes = require('./routes/transports.routes');
+const carsRoutes = require('./routes/cars.routes');
 const wishlistRoutes = require('./routes/wishlist.routes');
+const transportsRoutes = require('./routes/transports.routes');
 const specs = require('./docs/swagger');
-const db = require('../config/db.config');
-
-// Load environment variables
-dotenv.config();
+const pool = require('../config/db.config');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -36,31 +36,23 @@ const app = express();
 
 // CORS Configuration
 const whitelist = [
-  process.env.FRONTEND_URL,
-].filter(Boolean); // Remove any undefined values
+  'http://localhost:3000',  // React development server
+  'http://localhost:5173',  // Vite development server
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
+    if (!origin || whitelist.includes(origin)) {
       return callback(null, true);
     }
-    if (whitelist.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'x-csrf-token',
-    'csrf-token'
-  ],
-  exposedHeaders: ['Content-Range', 'X-Total-Count'],
-  maxAge: 86400
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Range', 'X-Total-Count']
 };
 
 // Apply CORS before other middleware
@@ -88,8 +80,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/transports', transportsRoutes);
+app.use('/api/cars', carsRoutes); 
 app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/transports', transportsRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Big Way API' });
@@ -103,12 +96,11 @@ app.use((err, req, res, next) => {
 
 // Only start the server if this file is run directly
 if (require.main === module) {
-  const PORT = process.env.PORT || 10000;
+  const PORT = process.env.PORT || 5000;
   
   // Test database connection before starting server
-  db.connect()
-    .then(client => {
-      client.release();
+  pool.query('SELECT NOW()')
+    .then(() => {
       logger.info('Database connection successful');
       
       app.listen(PORT, () => {

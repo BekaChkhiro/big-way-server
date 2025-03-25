@@ -377,7 +377,7 @@ router.post('/', authMiddleware, async (req, res) => {
  *       403:
  *         description: Forbidden - not the transport owner
  */
-router.post('/:id/images', authMiddleware, uploadMiddleware.array('images'), async (req, res) => {
+router.post('/:id/images', authMiddleware, upload.array('images'), async (req, res) => {
   try {
     const { id } = req.params;
     const car = await Car.addImages(parseInt(id), req.processedImages);

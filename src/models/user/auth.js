@@ -60,28 +60,42 @@ class UserAuth {
   }
 
   static async login(email, password) {
-    // Find user
-    const user = await UserModel.findByEmail(email);
-    if (!user) {
-      throw new Error('Invalid email or password');
+    const client = await pool.connect();
+    try {
+      // Find user
+      const result = await client.query(
+        'SELECT * FROM users WHERE email = $1',
+        [email]
+      );
+      const user = result.rows[0];
+
+      if (!user) {
+        throw new Error('Invalid email or password');
+      }
+
+      // Verify password
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        throw new Error('Invalid email or password');
+      }
+
+      // Generate token
+      const token = UserModel.generateToken(user);
+
+      // Remove password from response
+      delete user.password;
+      delete user.reset_token;
+      delete user.reset_token_expires;
+
+      return {
+        user,
+        token
+      };
+    } catch (error) {
+      throw error;
+    } finally {
+      client.release();
     }
-
-    // Verify password
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      throw new Error('Invalid email or password');
-    }
-
-    // Generate token
-    const token = UserModel.generateToken(user);
-
-    // Remove password from response
-    delete user.password;
-
-    return {
-      user,
-      token
-    };
   }
 
   static async changePassword(userId, currentPassword, newPassword) {

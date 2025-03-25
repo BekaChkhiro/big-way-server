@@ -9,31 +9,46 @@ function getPool() {
           connectionString: process.env.DATABASE_URL,
           ssl: {
             rejectUnauthorized: false
-          }
+          },
+          max: 20, // Maximum number of clients in the pool
+          idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+          connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
         }
       : {
           host: process.env.DB_HOST || 'localhost',
           port: process.env.DB_PORT || 5432,
           user: process.env.DB_USER || 'postgres',
           password: process.env.DB_PASSWORD || 'Lumia635-',
-          database: process.env.NODE_ENV === 'test' ? 'big_way_test_db' : 'big_way_db'
+          database: process.env.NODE_ENV === 'test' ? 'big_way_test_db' : 'big_way_db',
+          max: 20,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
         };
 
     pool = new Pool(config);
 
-    pool.on('error', (err) => {
+    // Error handling
+    pool.on('error', (err, client) => {
       console.error('Unexpected error on idle client', err);
-      process.exit(-1);
+      // Don't crash on connection errors, but log them
+      if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+        console.error('Database connection was closed.');
+      }
+      if (err.code === 'ER_CON_COUNT_ERROR') {
+        console.error('Database has too many connections.');
+      }
+      if (err.code === 'ECONNREFUSED') {
+        console.error('Database connection was refused.');
+      }
     });
 
-    // Test the connection
-    pool.query('SELECT NOW()', (err) => {
-      if (err) {
-        console.error('Database connection failed:', err);
-        process.exit(-1);
-      } else {
-        console.log('Database connection successful');
-      }
+    // Connection validation
+    pool.on('connect', (client) => {
+      client.query('SELECT NOW()', (err) => {
+        if (err) {
+          console.error('Error executing connection test query:', err);
+        }
+      });
     });
   }
   return pool;

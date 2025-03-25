@@ -1,6 +1,6 @@
 const pool = require('../../../config/db.config');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const { generateToken } = require('../../../config/jwt.config');
 
 class UserModel {
   static async findById(id) {
@@ -26,14 +26,10 @@ class UserModel {
   }
 
   static generateToken(user) {
-    return jwt.sign(
-      { 
-        id: user.id,
-        role: user.role
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    return generateToken({ 
+      id: user.id,
+      role: user.role
+    });
   }
 
   static async validateUser(id) {

@@ -21,14 +21,25 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
     const { user, token } = await User.login(email, password);
     res.json({ user, token });
   } catch (error) {
     console.error('Login error:', error);
-    if (error.message.includes('Invalid')) {
-      return res.status(401).json({ message: error.message });
+    
+    if (error.message.includes('Invalid email or password')) {
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
-    res.status(500).json({ message: 'Internal server error' });
+    
+    if (error.code === '23505') { // PostgreSQL unique violation
+      return res.status(400).json({ message: 'Account already exists' });
+    }
+    
+    res.status(500).json({ message: 'Login failed', error: error.message });
   }
 });
 

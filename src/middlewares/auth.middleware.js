@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+const { verifyToken } = require('../../config/jwt.config');
 
 const authMiddleware = (req, res, next) => {
   try {
@@ -12,7 +12,7 @@ const authMiddleware = (req, res, next) => {
       return res.status(401).json({ message: 'Token missing' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = verifyToken(token);
     req.user = decoded;
     next();
   } catch (error) {
