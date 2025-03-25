@@ -1,5 +1,6 @@
 const pool = require('../../../config/db.config');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const UserModel = require('./base');
 
 class UserAuth {
@@ -139,22 +140,22 @@ class UserAuth {
     }
   }
 
-  static async resetPassword(email) {
+  static async forgotPassword(email) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-
+      
       // Check if user exists
       const user = await UserModel.findByEmail(email);
       if (!user) {
         throw new Error('User not found');
       }
-
+      
       // Generate reset token
       const resetToken = crypto.randomBytes(32).toString('hex');
       const resetTokenHash = await bcrypt.hash(resetToken, 10);
       const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour
-
+      
       // Save reset token
       await client.query(
         `UPDATE users 
@@ -162,15 +163,25 @@ class UserAuth {
         WHERE id = $3`,
         [resetTokenHash, resetTokenExpires, user.id]
       );
-
+      
       await client.query('COMMIT');
-      return resetToken;
+      
+      // Return the unhashed token to be sent in email
+      return {
+        email: user.email,
+        resetToken: resetToken,
+        expires: resetTokenExpires
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
     }
+  }
+
+  static async resetPassword(email, token, newPassword) {
+    return this.setNewPassword(email, token, newPassword);
   }
 
   static async verifyResetToken(email, token) {

@@ -14,6 +14,7 @@ module.exports = {
   register: UserAuth.register,
   login: UserAuth.login,
   changePassword: UserAuth.changePassword,
+  forgotPassword: UserAuth.forgotPassword,
   resetPassword: UserAuth.resetPassword,
   verifyResetToken: UserAuth.verifyResetToken,
   setNewPassword: UserAuth.setNewPassword,
