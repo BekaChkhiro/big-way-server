@@ -7,7 +7,7 @@ const User = require('../models/user');
 router.post('/register', async (req, res) => {
   try {
     const { user, token } = await User.register(req.body);
-    res.status(201).json({ user, token });
+    res.status(201).json({ user, token, message: 'Registration successful' });
   } catch (error) {
     console.error('Registration error:', error);
     if (error.message.includes('exists')) {
@@ -32,7 +32,7 @@ router.post('/login', async (req, res) => {
     console.error('Login error:', error);
     
     if (error.message.includes('Invalid email or password')) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Authentication failed' });
     }
     
     if (error.code === '23505') { // PostgreSQL unique violation
@@ -40,6 +40,52 @@ router.post('/login', async (req, res) => {
     }
     
     res.status(500).json({ message: 'Login failed', error: error.message });
+  }
+});
+
+// Logout route
+router.post('/logout', authMiddleware, async (req, res) => {
+  try {
+    // JWT doesn't really have server-side logout, but we can invalidate tokens in a more complex setup
+    // Here we just return a success message as the client should remove the token
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Email verification
+router.get('/verify-email/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    await User.verifyEmail(token);
+    res.json({ message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    if (error.message.includes('Invalid') || error.message.includes('expired')) {
+      return res.status(400).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Token refresh
+router.post('/refresh-token', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ message: 'Refresh token is required' });
+    }
+    
+    const { token, user } = await User.refreshToken(refreshToken);
+    res.json({ token, user });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    if (error.message.includes('Invalid') || error.message.includes('expired')) {
+      return res.status(401).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
@@ -141,6 +187,39 @@ router.delete('/me', authMiddleware, async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Account deletion error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Admin only: Get all users
+router.get('/users', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    
+    const users = await User.findAll();
+    res.json({ users });
+  } catch (error) {
+    console.error('Users fetch error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Admin only: Get user by ID
+router.get('/users/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    
+    const user = await User.findById(parseInt(req.params.id));
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('User fetch error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
