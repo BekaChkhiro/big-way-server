@@ -96,8 +96,9 @@ class CarValidation {
       [carId]
     );
     
-    if (!carCheck.rows[0] || carCheck.rows[0].seller_id !== sellerId) {
-      throw new Error('Unauthorized to modify this transport');
+    // Check if user is authorized to modify this car
+    if (carCheck.rows[0].seller_id !== sellerId) {
+      throw new Error('Unauthorized to modify this car');
     }
   }
 }

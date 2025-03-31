@@ -9,7 +9,7 @@ const pool = require('../../config/db.config');
  * @swagger
  * components:
  *   schemas:
- *     Transport:
+ *     Car:
  *       type: object
  *       required:
  *         - brand_id
@@ -39,26 +39,7 @@ const pool = require('../../config/db.config');
  *         featured:
  *           type: boolean
  *         specifications:
- *           type: object
- *           properties:
- *             engine_type:
- *               type: string
- *             transmission:
- *               type: string
- *             fuel_type:
- *               type: string
- *             mileage:
- *               type: integer
- *             engine_size:
- *               type: number
- *             horsepower:
- *               type: integer
- *             doors:
- *               type: integer
- *             color:
- *               type: string
- *             body_type:
- *               type: string
+ *           $ref: '#/components/schemas/Specifications'
  *         location:
  *           type: object
  *           properties:
@@ -72,10 +53,10 @@ const pool = require('../../config/db.config');
 
 /**
  * @swagger
- * /api/transports:
+ * /api/cars:
  *   get:
- *     summary: Get all transports with filtering and pagination
- *     tags: [Transports]
+ *     summary: Get all cars with filtering and pagination
+ *     tags: [Cars]
  *     parameters:
  *       - in: query
  *         name: page
@@ -105,7 +86,7 @@ const pool = require('../../config/db.config');
  *           type: number
  *     responses:
  *       200:
- *         description: List of transports with pagination
+ *         description: List of cars with pagination
  *         content:
  *           application/json:
  *             schema:
@@ -114,7 +95,7 @@ const pool = require('../../config/db.config');
  *                 cars:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Transport'
+ *                     $ref: '#/components/schemas/Car'
  *                 pagination:
  *                   type: object
  *                   properties:
@@ -154,13 +135,13 @@ router.get('/', async (req, res) => {
 
 /**
  * @swagger
- * /api/transports/brands:
+ * /api/cars/brands:
  *   get:
- *     summary: Get all transport brands
- *     tags: [Transports]
+ *     summary: Get all car brands
+ *     tags: [Cars]
  *     responses:
  *       200:
- *         description: List of transport brands
+ *         description: List of car brands
  */
 router.get('/brands', async (req, res) => {
   try {
@@ -174,13 +155,13 @@ router.get('/brands', async (req, res) => {
 
 /**
  * @swagger
- * /api/transports/categories:
+ * /api/cars/categories:
  *   get:
- *     summary: Get all transport categories
- *     tags: [Transports]
+ *     summary: Get all car categories
+ *     tags: [Cars]
  *     responses:
  *       200:
- *         description: List of transport categories
+ *         description: List of car categories
  */
 router.get('/categories', async (req, res) => {
   try {
@@ -194,10 +175,10 @@ router.get('/categories', async (req, res) => {
 
 /**
  * @swagger
- * /api/transports/search:
+ * /api/cars/search:
  *   get:
- *     summary: Advanced search for transports
- *     tags: [Transports]
+ *     summary: Advanced search for cars
+ *     tags: [Cars]
  *     parameters:
  *       - in: query
  *         name: q
@@ -228,7 +209,7 @@ router.get('/search', async (req, res) => {
   try {
     const { 
       searchQuery,
-      transportType,
+      carType,
       brandId,
       categoryId,
       model,
@@ -246,7 +227,7 @@ router.get('/search', async (req, res) => {
 
     const result = await Car.searchCars({
       searchQuery,
-      transportType,
+      carType,
       brandId: brandId ? parseInt(brandId) : undefined,
       categoryId: categoryId ? parseInt(categoryId) : undefined,
       model,
@@ -271,10 +252,10 @@ router.get('/search', async (req, res) => {
 
 /**
  * @swagger
- * /api/transports/{id}:
+ * /api/cars/{id}:
  *   get:
- *     summary: Get transport by ID
- *     tags: [Transports]
+ *     summary: Get car by ID
+ *     tags: [Cars]
  *     parameters:
  *       - in: path
  *         name: id
@@ -283,13 +264,13 @@ router.get('/search', async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Transport details
+ *         description: Car details
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Transport'
+ *               $ref: '#/components/schemas/Car'
  *       404:
- *         description: Transport not found
+ *         description: Car not found
  */
 router.get('/:id', async (req, res) => {
   try {
@@ -297,7 +278,7 @@ router.get('/:id', async (req, res) => {
     const car = await Car.findById(parseInt(id));
     
     if (!car) {
-      return res.status(404).json({ message: 'Transport not found' });
+      return res.status(404).json({ message: 'Car not found' });
     }
 
     // Increment views
@@ -312,10 +293,10 @@ router.get('/:id', async (req, res) => {
 
 /**
  * @swagger
- * /api/transports:
+ * /api/cars:
  *   post:
- *     summary: Create new transport listing
- *     tags: [Transports]
+ *     summary: Create new car listing
+ *     tags: [Cars]
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -323,10 +304,10 @@ router.get('/:id', async (req, res) => {
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Transport'
+ *             $ref: '#/components/schemas/Car'
  *     responses:
  *       201:
- *         description: Transport created successfully
+ *         description: Car created successfully
  *       401:
  *         description: Unauthorized
  */
@@ -345,10 +326,10 @@ router.post('/', authMiddleware, async (req, res) => {
 
 /**
  * @swagger
- * /api/transports/{id}/images:
+ * /api/cars/{id}/images:
  *   post:
- *     summary: Upload images for a transport
- *     tags: [Transports]
+ *     summary: Upload images for a car
+ *     tags: [Cars]
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -375,7 +356,7 @@ router.post('/', authMiddleware, async (req, res) => {
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden - not the transport owner
+ *         description: Forbidden - not the car owner
  */
 router.post('/:id/images', authMiddleware, upload.array('images'), async (req, res) => {
   try {
@@ -391,7 +372,7 @@ router.post('/:id/images', authMiddleware, upload.array('images'), async (req, r
 // Apply cache headers to image retrievals
 router.use('/images', setCacheHeaders);
 
-// Update transport listing (requires authentication)
+// Update car listing (requires authentication)
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -409,7 +390,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Delete transport listing (requires authentication)
+// Delete car listing (requires authentication)
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -426,10 +407,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
 /**
  * @swagger
- * /api/transports/{id}/similar:
+ * /api/cars/{id}/similar:
  *   get:
- *     summary: Get similar transports based on brand, category, price range, and year
- *     tags: [Transports]
+ *     summary: Get similar cars based on brand, category, price range, and year
+ *     tags: [Cars]
  *     parameters:
  *       - in: path
  *         name: id
@@ -441,12 +422,12 @@ router.delete('/:id', authMiddleware, async (req, res) => {
  *         schema:
  *           type: integer
  *           default: 4
- *         description: Number of similar transports to return
+ *         description: Number of similar cars to return
  *     responses:
  *       200:
- *         description: List of similar transports
+ *         description: List of similar cars
  *       404:
- *         description: Transport not found
+ *         description: Car not found
  */
 router.get('/:id/similar', async (req, res) => {
   try {

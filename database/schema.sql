@@ -5,8 +5,9 @@ CREATE TYPE user_role AS ENUM ('user', 'admin');
 DROP TYPE IF EXISTS user_gender CASCADE;
 CREATE TYPE user_gender AS ENUM ('male', 'female');
 
--- Create custom enum type for transport types
-CREATE TYPE transport_type AS ENUM ('car', 'special_equipment', 'moto');
+-- Create custom enum type for vehicle types
+DROP TYPE IF EXISTS vehicle_type CASCADE;
+CREATE TYPE vehicle_type AS ENUM ('car', 'special_equipment', 'moto');
 
 -- Create custom enum for fuel types
 DROP TYPE IF EXISTS fuel_type CASCADE;
@@ -47,9 +48,9 @@ CREATE TABLE IF NOT EXISTS brands (
 CREATE TABLE IF NOT EXISTS categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    transport_type transport_type NOT NULL,
+    type vehicle_type NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(name, transport_type)
+    UNIQUE(name, type)
 );
 
 -- Enums for location types

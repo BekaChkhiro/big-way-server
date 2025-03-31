@@ -32,14 +32,16 @@ async function seed() {
     }
     console.log(`✓ Inserted ${brands.length} brands`);
 
-    // Seed categories
-    const categoryPromises = categories.map(category => 
-      client.query(
-        'INSERT INTO categories (name, transport_type) VALUES ($1, $2) RETURNING id', 
-        [category.name, category.transport_type]
-      )
+    // Insert categories
+    const categoryIds = await Promise.all(
+      categories.map(async (category) => {
+        const result = await pool.query(
+          'INSERT INTO categories (name, type) VALUES ($1, $2) RETURNING id', 
+          [category.name, category.type]
+        );
+        return result.rows[0].id;
+      })
     );
-    const categoryResults = await Promise.all(categoryPromises);
     console.log(`✓ Inserted ${categories.length} categories`);
 
     // Seed users

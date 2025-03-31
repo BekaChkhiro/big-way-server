@@ -2,6 +2,7 @@ const pool = require('../../../config/db.config');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const UserModel = require('./base');
+const { generateToken, generateRefreshToken } = require('../../../config/jwt.config');
 
 class UserAuth {
   static async register(userData) {
@@ -46,11 +47,13 @@ class UserAuth {
 
       await client.query('COMMIT');
       const user = result.rows[0];
-      const token = UserModel.generateToken(user);
+      const token = generateToken(user);
+      const refreshToken = generateRefreshToken(user);
 
       return {
         user,
-        token
+        token,
+        refreshToken
       };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -80,17 +83,19 @@ class UserAuth {
         throw new Error('Invalid email or password');
       }
 
-      // Generate token
-      const token = UserModel.generateToken(user);
+      // Generate tokens
+      const token = generateToken(user);
+      const refreshToken = generateRefreshToken(user);
 
-      // Remove password from response
+      // Remove sensitive data from response
       delete user.password;
       delete user.reset_token;
       delete user.reset_token_expires;
 
       return {
         user,
-        token
+        token,
+        refreshToken
       };
     } catch (error) {
       throw error;
@@ -234,6 +239,28 @@ class UserAuth {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  static async refreshToken(token) {
+    try {
+      const decoded = UserModel.verifyToken(token);
+      const user = await UserModel.findById(decoded.id);
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const newToken = generateToken(user);
+      const newRefreshToken = generateRefreshToken(user);
+
+      return {
+        token: newToken,
+        refreshToken: newRefreshToken,
+        user
+      };
+    } catch (error) {
+      throw new Error('Invalid refresh token');
     }
   }
 }

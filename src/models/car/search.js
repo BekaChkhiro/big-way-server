@@ -13,9 +13,9 @@ class CarSearch {
     let paramCounter = 3;
     
     let filterConditions = [];
-    if (filters.transport_type) {
-      filterConditions.push(`cat.transport_type = $${paramCounter}`);
-      params.push(filters.transport_type);
+    if (filters.type) {
+      filterConditions.push(`cat.type = $${paramCounter}`);
+      params.push(filters.type);
       paramCounter++;
     }
     if (filters.brand_id) {
@@ -140,7 +140,7 @@ class CarSearch {
 
   static async searchCars({
     searchQuery,
-    transportType,
+    carType,
     brandId,
     categoryId,
     model,
@@ -165,9 +165,9 @@ class CarSearch {
       paramCounter++;
     }
 
-    if (transportType) {
-      values.push(transportType);
-      conditions.push(`(SELECT transport_type FROM categories WHERE id = c.category_id) = $${paramCounter}`);
+    if (carType) {
+      values.push(carType);
+      conditions.push(`(SELECT type FROM categories WHERE id = c.category_id) = $${paramCounter}`);
       paramCounter++;
     }
 

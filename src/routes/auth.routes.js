@@ -6,8 +6,13 @@ const User = require('../models/user');
 // Registration route
 router.post('/register', async (req, res) => {
   try {
-    const { user, token } = await User.register(req.body);
-    res.status(201).json({ user, token, message: 'Registration successful' });
+    const { user, token, refreshToken } = await User.register(req.body);
+    res.status(201).json({ 
+      user, 
+      token, 
+      refreshToken,
+      message: 'Registration successful' 
+    });
   } catch (error) {
     console.error('Registration error:', error);
     if (error.message.includes('exists')) {
@@ -26,8 +31,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    const { user, token } = await User.login(email, password);
-    res.json({ user, token });
+    const { user, token, refreshToken } = await User.login(email, password);
+    res.json({ user, token, refreshToken });
   } catch (error) {
     console.error('Login error:', error);
     
@@ -70,7 +75,7 @@ router.get('/verify-email/:token', async (req, res) => {
   }
 });
 
-// Token refresh
+// Refresh token route
 router.post('/refresh-token', async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -78,14 +83,11 @@ router.post('/refresh-token', async (req, res) => {
       return res.status(400).json({ message: 'Refresh token is required' });
     }
     
-    const { token, user } = await User.refreshToken(refreshToken);
-    res.json({ token, user });
+    const { token, refreshToken: newRefreshToken, user } = await User.refreshToken(refreshToken);
+    res.json({ token, refreshToken: newRefreshToken, user });
   } catch (error) {
     console.error('Token refresh error:', error);
-    if (error.message.includes('Invalid') || error.message.includes('expired')) {
-      return res.status(401).json({ message: error.message });
-    }
-    res.status(500).json({ message: 'Internal server error' });
+    return res.status(401).json({ message: 'Invalid or expired refresh token' });
   }
 });
 
