@@ -1,5 +1,6 @@
 const pool = require('../../../config/db.config');
 
+// Valid fuel types
 const VALID_FUEL_TYPES = [
   'ბენზინი',
   'დიზელი',
@@ -8,9 +9,16 @@ const VALID_FUEL_TYPES = [
   'დატენვადი_ჰიბრიდი',
   'თხევადი_გაზი',
   'ბუნებრივი_გაზი',
-  'წყალბადი'
+  'წყალბადი',
+  'petrol',
+  'diesel',
+  'hybrid',
+  'electric',
+  'lpg',
+  'cng'
 ];
 
+// Valid colors
 const VALID_COLORS = [
   'თეთრი',
   'შავი', 
@@ -27,17 +35,37 @@ const VALID_COLORS = [
   'ჩალისფერი',
   'შინდისფერი',
   'ცისფერი',
-  'ყავისფერი'
+  'ყავისფერი',
+  'black',
+  'white',
+  'silver',
+  'gray',
+  'red',
+  'blue',
+  'green',
+  'yellow',
+  'brown',
+  'orange',
+  'purple',
+  'gold',
+  'beige'
 ];
 
+// Valid interior materials
 const VALID_INTERIOR_MATERIALS = [
   'ნაჭერი',
   'ტყავი',
   'ხელოვნური ტყავი',
   'კომბინირებული',
-  'ალკანტარა'
+  'ალკანტარა',
+  'leather',
+  'cloth',
+  'alcantara',
+  'vinyl',
+  'other'
 ];
 
+// Valid interior colors
 const VALID_INTERIOR_COLORS = [
   'შავი',
   'თეთრი',
@@ -49,10 +77,49 @@ const VALID_INTERIOR_COLORS = [
   'ყვითელი',
   'ნარინჯისფერი',
   'შინდისფერი',
-  'ოქროსფერი'
+  'ოქროსფერი',
+  'black',
+  'white',
+  'gray',
+  'brown',
+  'beige',
+  'red',
+  'blue',
+  'green',
+  'yellow',
+  'orange',
+  'purple',
+  'gold'
 ];
 
+// Valid clearance statuses
 const VALID_CLEARANCE_STATUSES = ['cleared', 'not_cleared', 'in_progress'];
+
+// Brand models mapping
+const BRAND_MODELS = {
+  // Toyota
+  1: ['Camry', 'Corolla', 'RAV4', 'Land Cruiser', 'Prius', 'Highlander', 'Avalon', '4Runner', 'Tacoma', 'Tundra'],
+  // Honda
+  2: ['Civic', 'Accord', 'CR-V', 'Pilot', 'HR-V', 'Odyssey', 'Ridgeline', 'Passport', 'Insight'],
+  // Ford
+  3: ['F-150', 'Mustang', 'Explorer', 'Escape', 'Edge', 'Ranger', 'Bronco', 'Expedition', 'Focus'],
+  // Alfa Romeo
+  4: ['Giulia', 'Stelvio', 'Tonale', '4C', 'Giulietta', 'Brera', '159', 'MiTo', 'Spider', 'GTV'],
+  // Chevrolet
+  5: ['Silverado', 'Equinox', 'Tahoe', 'Traverse', 'Malibu', 'Camaro', 'Suburban', 'Colorado', 'Blazer'],
+  // BMW
+  6: ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X7', 'M3', 'M5', 'i4', 'iX'],
+  // Mercedes-Benz
+  7: ['C-Class', 'E-Class', 'S-Class', 'GLC', 'GLE', 'GLS', 'A-Class', 'CLA', 'AMG GT'],
+  // Audi
+  8: ['A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT'],
+  // Volkswagen
+  9: ['Golf', 'Passat', 'Tiguan', 'Atlas', 'Jetta', 'Arteon', 'ID.4', 'Taos', 'GTI'],
+  // Hyundai
+  10: ['Elantra', 'Sonata', 'Tucson', 'Santa Fe', 'Palisade', 'Kona', 'Venue', 'Ioniq', 'Genesis'],
+  // Kia
+  11: ['Forte', 'K5', 'Sportage', 'Telluride', 'Sorento', 'Soul', 'Seltos', 'Carnival', 'Stinger']
+};
 
 class CarModel {
   static async findById(id) {
@@ -117,8 +184,10 @@ class CarModel {
   }
 
   static async getBrands() {
+    console.log('Fetching brands from database...');
     const query = 'SELECT * FROM brands ORDER BY name ASC';
     const result = await pool.query(query);
+    console.log('Available brands:', result.rows);
     return result.rows;
   }
 
@@ -157,5 +226,6 @@ module.exports = {
   VALID_COLORS,
   VALID_INTERIOR_MATERIALS,
   VALID_INTERIOR_COLORS,
-  VALID_CLEARANCE_STATUSES
+  VALID_CLEARANCE_STATUSES,
+  BRAND_MODELS
 };
