@@ -7,6 +7,7 @@ module.exports = {
   findById: UserModel.findById,
   findByEmail: UserModel.findByEmail,
   findByUsername: UserModel.findByUsername,
+  findAll: UserModel.findAll,
   generateToken: UserModel.generateToken,
   validateUser: UserModel.validateUser,
 

@@ -370,4 +370,179 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Get all cars (used by admin section)
+router.get('/', async (req, res) => {
+  try {
+    console.log('Fetching all cars');
+    
+    // Query to get all cars with their related data
+    const query = `
+      SELECT c.*, 
+        b.name as brand_name, 
+        cat.name as category_name,
+        u.id as seller_id,
+        loc.city, loc.state, loc.country,
+        spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
+        spec.engine_size, spec.color, spec.body_type, spec.steering_wheel, 
+        spec.drive_type, spec.interior_material, spec.interior_color
+      FROM cars c
+      LEFT JOIN brands b ON c.brand_id = b.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      LEFT JOIN users u ON c.seller_id = u.id
+      LEFT JOIN locations loc ON c.location_id = loc.id
+      LEFT JOIN specifications spec ON c.specification_id = spec.id
+      ORDER BY c.created_at DESC
+    `;
+    
+    const result = await pool.query(query);
+    
+    // Get images for each car
+    const cars = await Promise.all(result.rows.map(async (car) => {
+      const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
+      const imagesResult = await pool.query(imagesQuery, [car.id]);
+      
+      // Properly structure the car object with nested specifications
+      return {
+        id: car.id,
+        brand: car.brand_name,
+        model: car.model,
+        year: car.year,
+        price: car.price,
+        seller_id: car.seller_id,
+        description_ka: car.description_ka,
+        description_en: car.description_en,
+        description_ru: car.description_ru,
+        status: car.status,
+        featured: car.featured,
+        created_at: car.created_at,
+        updated_at: car.updated_at,
+        // Create a properly nested specifications object
+        specifications: {
+          engine_type: car.engine_type,
+          transmission: car.transmission,
+          fuel_type: car.fuel_type,
+          mileage: car.mileage || 0, // Ensure mileage is never undefined
+          engine_size: car.engine_size,
+          color: car.color,
+          body_type: car.body_type,
+          steering_wheel: car.steering_wheel,
+          drive_type: car.drive_type,
+          interior_material: car.interior_material,
+          interior_color: car.interior_color
+        },
+        // Create a properly nested location object
+        location: {
+          city: car.city,
+          state: car.state,
+          country: car.country
+        },
+        // Format images to match the expected structure
+        images: imagesResult.rows.map(img => ({
+          id: img.id,
+          url: img.image_url || img.url,
+          thumbnail_url: img.thumbnail_url,
+          medium_url: img.medium_url,
+          large_url: img.large_url
+        }))
+      };
+    }));
+    
+    console.log(`Found ${cars.length} cars in total`);
+    res.json(cars);
+  } catch (error) {
+    console.error('Error fetching all cars:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Get cars for the authenticated user
+router.get('/user', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log('Fetching cars for user ID:', userId);
+    
+    // Query to get all cars belonging to the authenticated user
+    const query = `
+      SELECT c.*, 
+        b.name as brand_name, 
+        cat.name as category_name,
+        loc.city, loc.state, loc.country,
+        spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
+        spec.engine_size, spec.color, spec.body_type, spec.steering_wheel, 
+        spec.drive_type, spec.interior_material, spec.interior_color
+      FROM cars c
+      LEFT JOIN brands b ON c.brand_id = b.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      LEFT JOIN locations loc ON c.location_id = loc.id
+      LEFT JOIN specifications spec ON c.specification_id = spec.id
+      WHERE c.seller_id = $1
+      ORDER BY c.created_at DESC
+    `;
+    
+    const result = await pool.query(query, [userId]);
+    
+    // Get images for each car
+    const cars = await Promise.all(result.rows.map(async (car) => {
+      const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
+      const imagesResult = await pool.query(imagesQuery, [car.id]);
+      
+      // Properly structure the car object with nested specifications
+      return {
+        id: car.id,
+        brand: car.brand_name,
+        model: car.model,
+        year: car.year,
+        price: car.price,
+        description_ka: car.description_ka,
+        description_en: car.description_en,
+        description_ru: car.description_ru,
+        status: car.status,
+        featured: car.featured,
+        created_at: car.created_at,
+        updated_at: car.updated_at,
+        // Create a properly nested specifications object
+        specifications: {
+          engine_type: car.engine_type,
+          transmission: car.transmission,
+          fuel_type: car.fuel_type,
+          mileage: car.mileage || 0, // Ensure mileage is never undefined
+          engine_size: car.engine_size,
+          color: car.color,
+          body_type: car.body_type,
+          steering_wheel: car.steering_wheel,
+          drive_type: car.drive_type,
+          interior_material: car.interior_material,
+          interior_color: car.interior_color
+        },
+        // Create a properly nested location object
+        location: {
+          city: car.city,
+          state: car.state,
+          country: car.country
+        },
+        // Format images to match the expected structure
+        images: imagesResult.rows.map(img => ({
+          id: img.id,
+          url: img.image_url || img.url,
+          thumbnail_url: img.thumbnail_url,
+          medium_url: img.medium_url,
+          large_url: img.large_url
+        }))
+      };
+    }));
+    
+    console.log(`Found ${cars.length} cars for user ID ${userId}`);
+    res.json(cars);
+  } catch (error) {
+    console.error('Error fetching user cars:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;
