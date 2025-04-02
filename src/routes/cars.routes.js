@@ -570,7 +570,7 @@ router.get('/:id', async (req, res) => {
         c.*,
         b.name as brand,
         cat.name as category,
-        l.city, l.state, l.country, l.location_type
+        l.city, l.state, l.country
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -632,8 +632,7 @@ router.get('/:id', async (req, res) => {
         id: car.location_id,
         city: car.city,
         state: car.state,
-        country: car.country,
-        location_type: car.location_type
+        country: car.country
       },
       // Format images to match the expected structure
       images: imagesResult.rows.map(img => ({
