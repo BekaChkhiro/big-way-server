@@ -459,6 +459,107 @@ router.get('/', async (req, res) => {
 });
 
 // Get cars for the authenticated user
+// Get a single car by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const carId = req.params.id;
+    console.log('Fetching car with ID:', carId);
+    
+    // Query to get a single car with its related data
+    const carQuery = `
+      SELECT 
+        c.*,
+        b.name as brand,
+        cat.name as category,
+        l.city, l.state, l.country, l.location_type
+      FROM cars c
+      LEFT JOIN brands b ON c.brand_id = b.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      LEFT JOIN locations l ON c.location_id = l.id
+      WHERE c.id = $1
+    `;
+    
+    const carResult = await pool.query(carQuery, [carId]);
+    
+    if (carResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: `Car with ID ${carId} not found`
+      });
+    }
+    
+    const car = carResult.rows[0];
+    
+    // Get car images
+    const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
+    const imagesResult = await pool.query(imagesQuery, [carId]);
+    
+    // Format the car data with nested objects
+    const formattedCar = {
+      id: car.id,
+      brand_id: car.brand_id,
+      category_id: car.category_id,
+      brand: car.brand,
+      model: car.model,
+      year: car.year,
+      price: car.price,
+      description_ka: car.description_ka,
+      description_en: car.description_en,
+      description_ru: car.description_ru,
+      status: car.status,
+      featured: car.featured,
+      seller_id: car.seller_id,
+      created_at: car.created_at,
+      updated_at: car.updated_at,
+      // Create a properly nested specifications object
+      specifications: {
+        id: car.id,
+        transmission: car.transmission,
+        fuel_type: car.fuel_type,
+        mileage: car.mileage || 0,
+        mileage_unit: 'km',
+        engine_size: car.engine_size,
+        color: car.color,
+        steering_wheel: car.steering_wheel,
+        drive_type: car.drive_type,
+        interior_color: car.interior_color,
+        has_navigation: car.has_navigation || false,
+        has_leather_interior: car.has_leather_interior || false,
+        has_sunroof: car.has_sunroof || false,
+        has_bluetooth: car.has_bluetooth || false,
+        has_rear_view_camera: car.has_rear_view_camera || false
+      },
+      // Create a properly nested location object
+      location: {
+        id: car.location_id,
+        city: car.city,
+        state: car.state,
+        country: car.country,
+        location_type: car.location_type
+      },
+      // Format images to match the expected structure
+      images: imagesResult.rows.map(img => ({
+        id: img.id,
+        car_id: img.car_id,
+        url: img.image_url || img.url,
+        thumbnail_url: img.thumbnail_url,
+        medium_url: img.medium_url,
+        large_url: img.large_url,
+        is_primary: img.is_primary
+      }))
+    };
+    
+    console.log(`Successfully retrieved car with ID ${carId}`);
+    res.json(formattedCar);
+  } catch (error) {
+    console.error('Error fetching car:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
 router.get('/user', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
