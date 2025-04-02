@@ -20,7 +20,6 @@ class CarCreate {
         mileage_unit: (carData.specifications?.mileage_unit) || carData.mileage_unit || 'km',
         engine_size: Number((carData.specifications?.engine_size) || carData.engine_size || 0),
         cylinders: Number((carData.specifications?.cylinders) || carData.cylinders || 0),
-        color: (carData.specifications?.color) || carData.color || 'black',
         body_type: (carData.specifications?.body_type) || carData.body_type || 'sedan',
         // Sanitize steering_wheel to be only 'left' or 'right'
         steering_wheel: (((carData.specifications?.steering_wheel) || carData.steering_wheel || 'left').toLowerCase().trim() === 'right' ? 'right' : 'left'),
@@ -226,7 +225,6 @@ class CarCreate {
         specifications.mileage_unit,
         specifications.engine_size,
         specifications.cylinders,
-        specifications.color,
         specifications.body_type,
         // steering_wheel removed
         specifications.drive_type,
@@ -254,7 +252,7 @@ class CarCreate {
       const specResult = await client.query(
         `INSERT INTO specifications 
         (engine_type, fuel_type, mileage, mileage_unit, 
-        engine_size, cylinders, color, body_type, drive_type,
+        engine_size, cylinders, body_type, drive_type,
         airbags_count, interior_material, interior_color,
         has_board_computer, has_alarm, manufacture_month, clearance_status)
         VALUES 
@@ -264,16 +262,15 @@ class CarCreate {
          $4 /* mileage_unit */, 
          $5 /* engine_size */, 
          $6 /* cylinders */, 
-         $7 /* color */, 
-         $8 /* body_type */, 
-         $9 /* drive_type */, 
-         $10 /* airbags_count */, 
-         $11 /* interior_material */, 
-         $12 /* interior_color */, 
-         $13 /* has_board_computer */, 
-         $14 /* has_alarm */, 
-         $15 /* manufacture_month */, 
-         $16 /* clearance_status */)
+         $7 /* body_type */, 
+         $8 /* drive_type */, 
+         $9 /* airbags_count */, 
+         $10 /* interior_material */, 
+         $11 /* interior_color */, 
+         $12 /* has_board_computer */, 
+         $13 /* has_alarm */, 
+         $14 /* manufacture_month */, 
+         $15 /* clearance_status */)
         RETURNING id`,
         finalSpecParams
       );
