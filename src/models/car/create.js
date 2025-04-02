@@ -277,16 +277,17 @@ class CarCreate {
 
       // Create location - removing problematic fields
       console.log(`[CarCreate] Removing is_transit field from locations table query`);
-      console.log(`[CarCreate] Removing location_type field from locations table query due to constraint violation`);
+      console.log(`[CarCreate] Using hard-coded 'dealer' value for location_type field due to not-null constraint`);
       
-      // Try without the location_type field, letting it use the default value if any
+      // Use a hard-coded value for location_type since it's a required field
       const locationResult = await client.query(
-        `INSERT INTO locations (city, state, country)
-        VALUES ($1, $2, $3) RETURNING id`,
+        `INSERT INTO locations (city, state, country, location_type)
+        VALUES ($1, $2, $3, $4) RETURNING id`,
         [
           carData.location.city,
           carData.location.state,
-          carData.location.country
+          carData.location.country,
+          'dealer' // Hard-coded value for location_type
         ]
       );
 
