@@ -94,14 +94,26 @@ router.post('/refresh-token', async (req, res) => {
 // Get current user profile (alias for /me)
 router.get('/profile', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    console.log('Profile endpoint: Received request with user ID:', req.user.id);
+    
+    try {
+      const user = await User.findById(req.user.id);
+      console.log('Profile endpoint: Database query result:', user ? 'User found' : 'User not found');
+      
+      if (!user) {
+        console.log('Profile endpoint: User not found in database');
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      console.log('Profile endpoint: Returning user data');
+      res.json(user);
+    } catch (dbError) {
+      console.error('Profile endpoint: Database error:', dbError);
+      return res.status(500).json({ message: 'Database error', error: dbError.message });
     }
-    res.json(user);
   } catch (error) {
     console.error('Profile fetch error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 });
 
