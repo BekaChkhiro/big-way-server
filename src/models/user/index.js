@@ -19,6 +19,7 @@ module.exports = {
   resetPassword: UserAuth.resetPassword,
   verifyResetToken: UserAuth.verifyResetToken,
   setNewPassword: UserAuth.setNewPassword,
+  refreshToken: UserAuth.refreshToken,
 
   // Profile update operations
   updateProfile: UserUpdate.updateProfile,

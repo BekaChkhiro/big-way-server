@@ -47,8 +47,9 @@ class UserAuth {
 
       await client.query('COMMIT');
       const user = result.rows[0];
-      const token = generateToken(user);
-      const refreshToken = generateRefreshToken(user);
+      const tokenPayload = { id: user.id, role: user.role };
+      const token = generateToken(tokenPayload);
+      const refreshToken = generateRefreshToken(tokenPayload);
 
       return {
         user,
@@ -83,9 +84,10 @@ class UserAuth {
         throw new Error('Invalid email or password');
       }
 
-      // Generate tokens
-      const token = generateToken(user);
-      const refreshToken = generateRefreshToken(user);
+      // Generate tokens with only necessary fields
+      const tokenPayload = { id: user.id, role: user.role };
+      const token = generateToken(tokenPayload);
+      const refreshToken = generateRefreshToken(tokenPayload);
 
       // Remove sensitive data from response
       delete user.password;
@@ -251,8 +253,9 @@ class UserAuth {
         throw new Error('User not found');
       }
 
-      const newToken = generateToken(user);
-      const newRefreshToken = generateRefreshToken(user);
+      const tokenPayload = { id: user.id, role: user.role };
+      const newToken = generateToken(tokenPayload);
+      const newRefreshToken = generateRefreshToken(tokenPayload);
 
       return {
         token: newToken,
