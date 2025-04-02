@@ -287,13 +287,19 @@ class CarCreate {
         ORDER BY e.enumsortorder
       `);
       
+      // Get the location data from the request
+      const { city, state, country } = carData.location;
+      
       // Default to 'transit' if no valid enum values found
       let validLocationType = 'transit';
+      let locationState = null;
+      let locationCountry = null;
       
+      // Get all available enum values
+      let availableTypes = [];
       if (enumQuery.rows.length > 0) {
-        console.log(`[CarCreate] Found valid enum values for location_type:`, enumQuery.rows.map(row => row.enumlabel));
-        // Use the first valid enum value
-        validLocationType = enumQuery.rows[0].enumlabel;
+        availableTypes = enumQuery.rows.map(row => row.enumlabel);
+        console.log(`[CarCreate] Found valid enum values for location_type:`, availableTypes);
       } else {
         // Fallback: check if there's a check constraint that defines valid values
         console.log(`[CarCreate] No enum values found, checking for check constraints`);
@@ -309,28 +315,49 @@ class CarCreate {
           console.log(`[CarCreate] Found check constraint:`, constraintDef);
           
           // Try to extract valid values from the constraint definition
-          const valueMatch = constraintDef.match(/location_type\s*=\s*ANY\s*\(\s*ARRAY\s*\[\s*'([^']+)'(?:\s*,\s*'([^']+)')*\s*\]\s*::/i);
+          const valueMatch = constraintDef.match(/location_type\s*=\s*'([^']+)'::location_type/g);
           if (valueMatch) {
-            const validValues = valueMatch.slice(1).filter(Boolean);
-            console.log(`[CarCreate] Extracted valid values from constraint:`, validValues);
-            if (validValues.length > 0) {
-              validLocationType = validValues[0];
-            }
+            availableTypes = valueMatch.map(match => {
+              const typeMatch = match.match(/location_type\s*=\s*'([^']+)'::location_type/);
+              return typeMatch ? typeMatch[1] : null;
+            }).filter(Boolean);
+            console.log(`[CarCreate] Extracted valid values from constraint:`, availableTypes);
           }
         }
       }
       
-      console.log(`[CarCreate] Using '${validLocationType}' value for location_type field`);
+      // Determine the appropriate location_type based on provided state and country
+      if (state && country && availableTypes.includes('international')) {
+        // If both state and country are provided, use international
+        validLocationType = 'international';
+        locationState = state;
+        locationCountry = country;
+        console.log(`[CarCreate] Using 'international' type with state and country`);
+      } else if (availableTypes.includes('georgia')) {
+        // If no state and country or only city is provided, use georgia
+        validLocationType = 'georgia';
+        locationState = null;
+        locationCountry = null;
+        console.log(`[CarCreate] Using 'georgia' type with null state and country`);
+      } else if (availableTypes.includes('transit')) {
+        // Fallback to transit
+        validLocationType = 'transit';
+        locationState = null;
+        locationCountry = null;
+        console.log(`[CarCreate] Using 'transit' type with null state and country`);
+      }
       
-      // Use the valid location_type value
+      console.log(`[CarCreate] Using '${validLocationType}' value for location_type field with state=${locationState}, country=${locationCountry}`);
+      
+      // Use the valid location_type value with appropriate state and country values
       const locationResult = await client.query(
         `INSERT INTO locations (city, state, country, location_type)
         VALUES ($1, $2, $3, $4) RETURNING id`,
         [
-          carData.location.city,
-          carData.location.state,
-          carData.location.country,
-          validLocationType // Using a valid enum value
+          city,
+          locationState,
+          locationCountry,
+          validLocationType // Using a valid enum value with matching state/country
         ]
       );
 
