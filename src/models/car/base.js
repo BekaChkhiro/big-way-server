@@ -97,28 +97,36 @@ const VALID_CLEARANCE_STATUSES = ['cleared', 'not_cleared', 'in_progress'];
 
 // Brand models mapping
 const BRAND_MODELS = {
-  // Toyota
-  1: ['Camry', 'Corolla', 'RAV4', 'Land Cruiser', 'Prius', 'Highlander', 'Avalon', '4Runner', 'Tacoma', 'Tundra'],
-  // Honda
-  2: ['Civic', 'Accord', 'CR-V', 'Pilot', 'HR-V', 'Odyssey', 'Ridgeline', 'Passport', 'Insight'],
-  // Ford
-  3: ['F-150', 'Mustang', 'Explorer', 'Escape', 'Edge', 'Ranger', 'Bronco', 'Expedition', 'Focus'],
+  // Acura
+  1: ['MDX', 'RDX', 'TLX', 'ILX', 'NSX', 'RLX', 'TL', 'TSX', 'ZDX'],
+  // Aion
+  2: ['S', 'Y', 'V', 'LX', 'ES', 'Hyper GT', 'V Plus'],
+  // AIQAR
+  3: ['A4', 'Q5', 'A6', 'Q7', 'A3', 'Q3', 'A8', 'TT', 'RS6'],
   // Alfa Romeo
   4: ['Giulia', 'Stelvio', 'Tonale', '4C', 'Giulietta', 'Brera', '159', 'MiTo', 'Spider', 'GTV'],
-  // Chevrolet
-  5: ['Silverado', 'Equinox', 'Tahoe', 'Traverse', 'Malibu', 'Camaro', 'Suburban', 'Colorado', 'Blazer'],
-  // BMW
-  6: ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X7', 'M3', 'M5', 'i4', 'iX'],
-  // Mercedes-Benz
-  7: ['C-Class', 'E-Class', 'S-Class', 'GLC', 'GLE', 'GLS', 'A-Class', 'CLA', 'AMG GT'],
+  // AMC
+  5: ['Javelin', 'Gremlin', 'Pacer', 'Hornet', 'Eagle', 'Spirit', 'Concord', 'Matador'],
+  // Arcfox
+  6: ['Alpha-T', 'Alpha-S', 'ECF', 'GT', 'Lite'],
+  // Aston Martin
+  7: ['DB11', 'Vantage', 'DBS', 'DBX', 'Valkyrie', 'Vanquish', 'Rapide', 'DB9', 'DB12'],
   // Audi
-  8: ['A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT'],
-  // Volkswagen
-  9: ['Golf', 'Passat', 'Tiguan', 'Atlas', 'Jetta', 'Arteon', 'ID.4', 'Taos', 'GTI'],
-  // Hyundai
-  10: ['Elantra', 'Sonata', 'Tucson', 'Santa Fe', 'Palisade', 'Kona', 'Venue', 'Ioniq', 'Genesis'],
-  // Kia
-  11: ['Forte', 'K5', 'Sportage', 'Telluride', 'Sorento', 'Soul', 'Seltos', 'Carnival', 'Stinger']
+  8: ['A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT', 'S4', 'S6', 'RS4', 'Q8'],
+  // Avatr
+  9: ['11', '12', 'Concept', 'SUV', 'Sedan'],
+  // Baic
+  10: ['BJ40', 'EU5', 'X7', 'EX5', 'BJ80', 'BJ20', 'EU7', 'EX3'],
+  // Bentley
+  11: ['Continental GT', 'Bentayga', 'Flying Spur', 'Mulsanne', 'Bacalar', 'Batur'],
+  // BMW
+  12: ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X7', 'M3', 'M5', 'i4', 'iX'],
+  // Ford (ID 39 in our database)
+  39: ['F-150', 'Mustang', 'Explorer', 'Escape', 'Edge', 'Ranger', 'Bronco', 'Expedition', 'Focus'],
+  // Volkswagen (ID 132 in our database)
+  132: ['Golf', 'Passat', 'Tiguan', 'Atlas', 'Jetta', 'Arteon', 'ID.4', 'Taos', 'GTI'],
+  // Toyota (ID 128 in our database)
+  128: ['Camry', 'Corolla', 'RAV4', 'Land Cruiser', 'Prius', 'Highlander', 'Avalon', '4Runner', 'Tacoma', 'Tundra']
 };
 
 class CarModel {
