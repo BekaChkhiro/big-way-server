@@ -277,16 +277,17 @@ class CarCreate {
 
       // Create location - removing problematic fields
       console.log(`[CarCreate] Removing is_transit field from locations table query`);
-      console.log(`[CarCreate] Removing location_type field completely due to enum type mismatch`);
+      console.log(`[CarCreate] Using 'georgia' value for location_type field from request`);
       
-      // Completely remove location_type field from the query
+      // Use 'georgia' value for location_type since it's passed in the request
       const locationResult = await client.query(
-        `INSERT INTO locations (city, state, country)
-        VALUES ($1, $2, $3) RETURNING id`,
+        `INSERT INTO locations (city, state, country, location_type)
+        VALUES ($1, $2, $3, $4) RETURNING id`,
         [
           carData.location.city,
           carData.location.state,
-          carData.location.country
+          carData.location.country,
+          'georgia' // Using the value from the request
         ]
       );
 
