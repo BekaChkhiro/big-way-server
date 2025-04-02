@@ -287,7 +287,7 @@ class CarCreate {
           carData.location.city,
           carData.location.state,
           carData.location.country,
-          'dealer' // Hard-coded value for location_type
+          'city' // Hard-coded value for location_type
         ]
       );
 
