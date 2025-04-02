@@ -13,10 +13,25 @@ const pool = new Pool({
 async function executeSqlFile(filePath) {
   try {
     console.log(`Executing SQL file: ${filePath}`);
-    const fullPath = path.resolve(__dirname, filePath);
+    
+    // Handle both absolute and relative paths
+    let fullPath;
+    if (path.isAbsolute(filePath)) {
+      fullPath = filePath;
+    } else {
+      // For relative paths, first try relative to current directory
+      const relativePath = path.resolve(process.cwd(), filePath);
+      if (fs.existsSync(relativePath)) {
+        fullPath = relativePath;
+      } else {
+        // Then try relative to the script directory
+        fullPath = path.resolve(__dirname, filePath);
+      }
+    }
     
     if (!fs.existsSync(fullPath)) {
       console.error(`File not found: ${fullPath}`);
+      console.log(`Tried paths:\n- ${path.resolve(process.cwd(), filePath)}\n- ${path.resolve(__dirname, filePath)}`);
       return false;
     }
     
