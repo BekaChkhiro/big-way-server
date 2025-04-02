@@ -2,7 +2,7 @@ const pool = require('../../../config/db.config');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const UserModel = require('./base');
-const { generateToken, generateRefreshToken } = require('../../../config/jwt.config');
+const { generateToken, generateRefreshToken, verifyToken } = require('../../../config/jwt.config');
 
 class UserAuth {
   static async register(userData) {
@@ -244,7 +244,7 @@ class UserAuth {
 
   static async refreshToken(token) {
     try {
-      const decoded = UserModel.verifyToken(token);
+      const decoded = verifyToken(token);
       const user = await UserModel.findById(decoded.id);
       
       if (!user) {
