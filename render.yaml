@@ -2,7 +2,7 @@ services:
   - type: web
     name: big-way-api
     env: node
-    buildCommand: npm install
+    buildCommand: npm install && node database/render-import.js
     startCommand: npm start
     envVars:
       - key: NODE_ENV
