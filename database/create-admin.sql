@@ -7,12 +7,12 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@bigway.com') THEN
         -- Insert admin user with hashed password
         INSERT INTO users 
-        (username, email, password, first_name, last_name, role)
+        (username, email, password, first_name, last_name, age, phone, role)
         VALUES 
         ('admin', 'admin@bigway.com', 
          -- This is bcrypt hash for 'admin123'
          '$2a$10$rrCvTWRyXGP7tXkOSPvF8.ZY7BKr9GTZJj.JGZjVdPZ2c8VY6RFOm', 
-         'Admin', 'User', 'admin');
+         'Admin', 'User', 30, '+1234567890', 'admin');
         
         RAISE NOTICE 'Admin user created successfully';
     ELSE
