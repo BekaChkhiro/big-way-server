@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs').promises;
 
 class CarCreate {
-  async create(carData, images, sellerId) {
+  async create(carData, images, sellerId, processedImages = []) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -320,29 +320,61 @@ class CarCreate {
       // Process and save images
       const carImages = [];
       if (images && images.length > 0) {
-        for (const file of images) {
-          // The table has image_url instead of url column
-          console.log(`[CarCreate] Using image_url column instead of url in car_images table query`);
-          const imageResult = await client.query(
-            `INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id`,
-            [
-              carResult.rows[0].id,
-              `/uploads/cars/${file.filename}`, // image_url
-              `/uploads/cars/${file.filename}`, // thumbnail_url
-              `/uploads/cars/${file.filename}`, // medium_url
-              `/uploads/cars/${file.filename}`  // large_url
-            ]
-          );
-          // Update the returned object to match the database schema
-          carImages.push({
-            id: imageResult.rows[0].id,
-            image_url: `/uploads/cars/${file.filename}`,
-            thumbnail_url: `/uploads/cars/${file.filename}`,
-            medium_url: `/uploads/cars/${file.filename}`,
-            large_url: `/uploads/cars/${file.filename}`
-          });
+        // Check if we have processed S3 images
+        if (processedImages && processedImages.length > 0) {
+          console.log(`[CarCreate] Using processed S3 images: ${processedImages.length} images`);
+          for (let i = 0; i < Math.min(images.length, processedImages.length); i++) {
+            const processedImage = processedImages[i];
+            // The table has image_url instead of url column
+            console.log(`[CarCreate] Using S3 URLs for image ${i}`);
+            const imageResult = await client.query(
+              `INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url)
+              VALUES ($1, $2, $3, $4, $5)
+              RETURNING id`,
+              [
+                carResult.rows[0].id,
+                processedImage.original, // image_url from S3
+                processedImage.thumbnail, // thumbnail_url from S3
+                processedImage.medium, // medium_url from S3
+                processedImage.large  // large_url from S3
+              ]
+            );
+            // Update the returned object to match the database schema
+            carImages.push({
+              id: imageResult.rows[0].id,
+              image_url: processedImage.original,
+              thumbnail_url: processedImage.thumbnail,
+              medium_url: processedImage.medium,
+              large_url: processedImage.large
+            });
+          }
+        } else {
+          // Fallback to local storage
+          console.log(`[CarCreate] Using local storage for images as fallback`);
+          for (const file of images) {
+            // The table has image_url instead of url column
+            console.log(`[CarCreate] Using image_url column instead of url in car_images table query`);
+            const imageResult = await client.query(
+              `INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url)
+              VALUES ($1, $2, $3, $4, $5)
+              RETURNING id`,
+              [
+                carResult.rows[0].id,
+                `/uploads/cars/${file.filename}`, // image_url
+                `/uploads/cars/${file.filename}`, // thumbnail_url
+                `/uploads/cars/${file.filename}`, // medium_url
+                `/uploads/cars/${file.filename}`  // large_url
+              ]
+            );
+            // Update the returned object to match the database schema
+            carImages.push({
+              id: imageResult.rows[0].id,
+              image_url: `/uploads/cars/${file.filename}`,
+              thumbnail_url: `/uploads/cars/${file.filename}`,
+              medium_url: `/uploads/cars/${file.filename}`,
+              large_url: `/uploads/cars/${file.filename}`
+            });
+          }
         }
       }
 
@@ -367,6 +399,95 @@ class CarCreate {
       client.release();
     }
   }
+
+  // Delete a car by ID
+  async delete(carId, userId = null) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check if the car exists
+      const carCheckQuery = 'SELECT * FROM cars WHERE id = $1';
+      const carCheckResult = await client.query(carCheckQuery, [carId]);
+      
+      if (carCheckResult.rows.length === 0) {
+        throw new Error('Car not found');
+      }
+
+      const car = carCheckResult.rows[0];
+      
+      // If userId is provided, check if the user is the owner of the car
+      // This is for regular users. For admin users, this check is bypassed.
+      if (userId && car.seller_id !== userId) {
+        // Get the user to check if they are an admin
+        const userQuery = 'SELECT role FROM users WHERE id = $1';
+        const userResult = await client.query(userQuery, [userId]);
+        
+        if (userResult.rows.length === 0) {
+          throw new Error('User not found');
+        }
+        
+        const userRole = userResult.rows[0].role;
+        
+        // If user is not an admin and not the owner, throw error
+        if (userRole !== 'admin' && car.seller_id !== userId) {
+          throw new Error('Unauthorized: You can only delete your own car listings');
+        }
+      }
+
+      // Get image IDs and paths for deletion
+      const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
+      const imagesResult = await client.query(imagesQuery, [carId]);
+      
+      // Delete car images from the database
+      if (imagesResult.rows.length > 0) {
+        await client.query('DELETE FROM car_images WHERE car_id = $1', [carId]);
+        
+        // Try to delete image files from the filesystem (if they're local)
+        for (const image of imagesResult.rows) {
+          // Only attempt to delete local files, not S3 URLs
+          if (image.image_url && !image.image_url.startsWith('http')) {
+            try {
+              const filePath = path.join(__dirname, '../../../', image.image_url);
+              await fs.unlink(filePath).catch(err => console.warn(`Could not delete file ${filePath}:`, err));
+            } catch (error) {
+              console.warn(`Error deleting image file: ${error.message}`);
+              // Continue with deletion even if file removal fails
+            }
+          }
+        }
+      }
+
+      // Get specification and location IDs
+      const specAndLocationQuery = 'SELECT specification_id, location_id FROM cars WHERE id = $1';
+      const specAndLocationResult = await client.query(specAndLocationQuery, [carId]);
+      
+      // Delete the car
+      await client.query('DELETE FROM cars WHERE id = $1', [carId]);
+      
+      // Delete associated specification and location if they exist
+      if (specAndLocationResult.rows.length > 0) {
+        const { specification_id, location_id } = specAndLocationResult.rows[0];
+        
+        if (specification_id) {
+          await client.query('DELETE FROM specifications WHERE id = $1', [specification_id]);
+        }
+        
+        if (location_id) {
+          await client.query('DELETE FROM locations WHERE id = $1', [location_id]);
+        }
+      }
+
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error deleting car:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
 
-module.exports = CarCreate;
+module.exports = new CarCreate();

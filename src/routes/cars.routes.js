@@ -1,35 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const CarCreate = require('../models/car/create');
 const pool = require('../../config/db.config');
 const { BRAND_MODELS } = require('../models/car/base');
 const authMiddleware = require('../middlewares/auth.middleware');
-const { processAndUpload, setCacheHeaders } = require('../middlewares/upload.middleware');
+const { upload, processAndUpload, setCacheHeaders } = require('../middlewares/upload.middleware');
 
-// Create uploads directory if it doesn't exist
+// Create uploads directory if it doesn't exist (for fallback)
 const uploadDir = path.join(__dirname, '../../uploads/cars');
 fs.mkdir(uploadDir, { recursive: true }).catch(console.error);
 
-// Configure multer for handling file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const carUpload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
-});
+// Use the upload middleware configured for AWS S3
+const carUpload = upload;
 
 // Get all brands
 router.get('/brands', async (req, res) => {
@@ -281,8 +265,21 @@ router.post('/', authMiddleware, carUpload.array('images', 10), async (req, res)
     const carData = JSON.parse(req.body.data);
     console.log('Parsed car data:', carData);
     
-    const carCreate = new CarCreate();
-    const result = await carCreate.create(carData, req.files, req.user.id);
+    // Process and upload images to AWS S3
+    let processedImages = [];
+    if (req.files && req.files.length > 0) {
+      try {
+        processedImages = await processAndUpload(req.files);
+        console.log('Images processed and uploaded to S3:', processedImages);
+      } catch (uploadError) {
+        console.error('Error uploading images to S3:', uploadError);
+        // Continue with local storage as fallback
+        console.log('Using local storage as fallback');
+      }
+    }
+    
+    // CarCreate is already instantiated when imported (it exports an instance, not a class)
+    const result = await CarCreate.create(carData, req.files, req.user.id, processedImages);
     
     console.log('Car created successfully:', result);
     res.status(201).json({
@@ -311,12 +308,30 @@ router.post('/', authMiddleware, carUpload.array('images', 10), async (req, res)
 router.post('/:id/images', authMiddleware, carUpload.array('images'), async (req, res) => {
   try {
     const { id } = req.params;
-    const images = req.files.map(file => ({
-      url: `/uploads/cars/${file.filename}`,
-      thumbnail_url: `/uploads/cars/${file.filename}`,
-      medium_url: `/uploads/cars/${file.filename}`,
-      large_url: `/uploads/cars/${file.filename}`
-    }));
+    
+    // Process and upload images to AWS S3
+    let images = [];
+    try {
+      const processedImages = await processAndUpload(req.files);
+      console.log('Images processed and uploaded to S3:', processedImages);
+      
+      // Format the images for database storage
+      images = processedImages.map(img => ({
+        url: img.original,
+        thumbnail_url: img.thumbnail,
+        medium_url: img.medium,
+        large_url: img.large
+      }));
+    } catch (uploadError) {
+      console.error('Error uploading images to S3:', uploadError);
+      // Fallback to local storage
+      images = req.files.map(file => ({
+        url: `/uploads/cars/${file.filename}`,
+        thumbnail_url: `/uploads/cars/${file.filename}`,
+        medium_url: `/uploads/cars/${file.filename}`,
+        large_url: `/uploads/cars/${file.filename}`
+      }));
+    }
 
     // Add images to the car
     await CarCreate.addImages(parseInt(id), images, req.user.id);
@@ -459,6 +474,92 @@ router.get('/', async (req, res) => {
 });
 
 // Get cars for the authenticated user
+router.get('/user', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log('Fetching cars for user ID:', userId);
+    
+    // Query to get all cars belonging to the authenticated user
+    const query = `
+      SELECT c.*, 
+        b.name as brand_name, 
+        cat.name as category_name,
+        loc.city, loc.state, loc.country,
+        spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
+        spec.engine_size, spec.color, spec.body_type, spec.steering_wheel, 
+        spec.drive_type, spec.interior_material, spec.interior_color
+      FROM cars c
+      LEFT JOIN brands b ON c.brand_id = b.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      LEFT JOIN locations loc ON c.location_id = loc.id
+      LEFT JOIN specifications spec ON c.specification_id = spec.id
+      WHERE c.seller_id = $1
+      ORDER BY c.created_at DESC
+    `;
+    
+    const result = await pool.query(query, [userId]);
+    
+    // Get images for each car
+    const cars = await Promise.all(result.rows.map(async (car) => {
+      const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
+      const imagesResult = await pool.query(imagesQuery, [car.id]);
+      
+      // Properly structure the car object with nested specifications
+      return {
+        id: car.id,
+        brand: car.brand_name,
+        model: car.model,
+        year: car.year,
+        price: car.price,
+        description_ka: car.description_ka,
+        description_en: car.description_en,
+        description_ru: car.description_ru,
+        status: car.status,
+        featured: car.featured,
+        created_at: car.created_at,
+        updated_at: car.updated_at,
+        // Create a properly nested specifications object
+        specifications: {
+          engine_type: car.engine_type,
+          transmission: car.transmission,
+          fuel_type: car.fuel_type,
+          mileage: car.mileage || 0, // Ensure mileage is never undefined
+          engine_size: car.engine_size,
+          color: car.color,
+          body_type: car.body_type,
+          steering_wheel: car.steering_wheel,
+          drive_type: car.drive_type,
+          interior_material: car.interior_material,
+          interior_color: car.interior_color
+        },
+        // Create a properly nested location object
+        location: {
+          city: car.city,
+          state: car.state,
+          country: car.country
+        },
+        // Format images to match the expected structure
+        images: imagesResult.rows.map(img => ({
+          id: img.id,
+          url: img.image_url || img.url,
+          thumbnail_url: img.thumbnail_url,
+          medium_url: img.medium_url,
+          large_url: img.large_url
+        }))
+      };
+    }));
+    
+    console.log(`Found ${cars.length} cars for user ID ${userId}`);
+    res.json(cars);
+  } catch (error) {
+    console.error('Error fetching user cars:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
 // Get a single car by ID
 router.get('/:id', async (req, res) => {
   try {
@@ -553,92 +654,6 @@ router.get('/:id', async (req, res) => {
     res.json(formattedCar);
   } catch (error) {
     console.error('Error fetching car:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Internal server error'
-    });
-  }
-});
-
-router.get('/user', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    console.log('Fetching cars for user ID:', userId);
-    
-    // Query to get all cars belonging to the authenticated user
-    const query = `
-      SELECT c.*, 
-        b.name as brand_name, 
-        cat.name as category_name,
-        loc.city, loc.state, loc.country,
-        spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
-        spec.engine_size, spec.color, spec.body_type, spec.steering_wheel, 
-        spec.drive_type, spec.interior_material, spec.interior_color
-      FROM cars c
-      LEFT JOIN brands b ON c.brand_id = b.id
-      LEFT JOIN categories cat ON c.category_id = cat.id
-      LEFT JOIN locations loc ON c.location_id = loc.id
-      LEFT JOIN specifications spec ON c.specification_id = spec.id
-      WHERE c.seller_id = $1
-      ORDER BY c.created_at DESC
-    `;
-    
-    const result = await pool.query(query, [userId]);
-    
-    // Get images for each car
-    const cars = await Promise.all(result.rows.map(async (car) => {
-      const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
-      const imagesResult = await pool.query(imagesQuery, [car.id]);
-      
-      // Properly structure the car object with nested specifications
-      return {
-        id: car.id,
-        brand: car.brand_name,
-        model: car.model,
-        year: car.year,
-        price: car.price,
-        description_ka: car.description_ka,
-        description_en: car.description_en,
-        description_ru: car.description_ru,
-        status: car.status,
-        featured: car.featured,
-        created_at: car.created_at,
-        updated_at: car.updated_at,
-        // Create a properly nested specifications object
-        specifications: {
-          engine_type: car.engine_type,
-          transmission: car.transmission,
-          fuel_type: car.fuel_type,
-          mileage: car.mileage || 0, // Ensure mileage is never undefined
-          engine_size: car.engine_size,
-          color: car.color,
-          body_type: car.body_type,
-          steering_wheel: car.steering_wheel,
-          drive_type: car.drive_type,
-          interior_material: car.interior_material,
-          interior_color: car.interior_color
-        },
-        // Create a properly nested location object
-        location: {
-          city: car.city,
-          state: car.state,
-          country: car.country
-        },
-        // Format images to match the expected structure
-        images: imagesResult.rows.map(img => ({
-          id: img.id,
-          url: img.image_url || img.url,
-          thumbnail_url: img.thumbnail_url,
-          medium_url: img.medium_url,
-          large_url: img.large_url
-        }))
-      };
-    }));
-    
-    console.log(`Found ${cars.length} cars for user ID ${userId}`);
-    res.json(cars);
-  } catch (error) {
-    console.error('Error fetching user cars:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error'
