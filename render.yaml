@@ -1,31 +1,27 @@
-services:
-  - type: web
-    name: big-way-api
-    env: node
-    buildCommand: npm install && node database/render-import.js
-    startCommand: npm start
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: DB_HOST
-        sync: false
-      - key: DB_PORT
-        sync: false
-      - key: DB_USER
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
-      - key: DB_NAME
-        sync: false
-      - key: JWT_SECRET
-        generateValue: true
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: AWS_REGION
-        sync: false
-      - key: AWS_BUCKET_NAME
-        sync: false
+Connecting to Render.com database...
+Reading original SQL dump...
+Removing backup_categories statements...
+Extracting car_models statements for controlled import...
+Extracted 1105 car_models statements
+Fixing known problematic statements...
+Fixing categories table type field...
+Writing cleaned SQL dump...
+Cleaned SQL dump saved to: /home/bekolozi/Desktop/big-way/server/database/clean-data-dump.sql
+Error in cleanup and import process: Error: getaddrinfo EAI_AGAIN dpg-cvmhjfogjchc73d3qhag-a
+    at /home/bekolozi/Desktop/big-way/server/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async cleanupAndImportData (/home/bekolozi/Desktop/big-way/server/database/fix-data-import.js:100:20) {
+  errno: -3001,
+  code: 'EAI_AGAIN',
+  syscall: 'getaddrinfo',
+  hostname: 'dpg-cvmhjfogjchc73d3qhag-a'
+}
+Failed to import data: Error: getaddrinfo EAI_AGAIN dpg-cvmhjfogjchc73d3qhag-a
+    at /home/bekolozi/Desktop/big-way/server/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async cleanupAndImportData (/home/bekolozi/Desktop/big-way/server/database/fix-data-import.js:100:20) {
+  errno: -3001,
+  code: 'EAI_AGAIN',
+  syscall: 'getaddrinfo',
+  hostname: 'dpg-cvmhjfogjchc73d3qhag-a'
+}
