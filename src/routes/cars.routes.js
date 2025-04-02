@@ -398,7 +398,7 @@ router.get('/', async (req, res) => {
         u.id as seller_id,
         loc.city, loc.state, loc.country,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
-        spec.engine_size, spec.color, spec.body_type, spec.steering_wheel, 
+        spec.engine_size, spec.body_type, spec.steering_wheel, 
         spec.drive_type, spec.interior_material, spec.interior_color
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
@@ -486,7 +486,7 @@ router.get('/user', authMiddleware, async (req, res) => {
         cat.name as category_name,
         loc.city, loc.state, loc.country,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
-        spec.engine_size, spec.color, spec.body_type, spec.steering_wheel, 
+        spec.engine_size, spec.body_type, spec.steering_wheel, 
         spec.drive_type, spec.interior_material, spec.interior_color
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
