@@ -438,7 +438,6 @@ router.get('/', async (req, res) => {
           fuel_type: car.fuel_type,
           mileage: car.mileage || 0, // Ensure mileage is never undefined
           engine_size: car.engine_size,
-          color: car.color,
           body_type: car.body_type,
           steering_wheel: car.steering_wheel,
           drive_type: car.drive_type,
@@ -525,7 +524,6 @@ router.get('/user', authMiddleware, async (req, res) => {
           fuel_type: car.fuel_type,
           mileage: car.mileage || 0, // Ensure mileage is never undefined
           engine_size: car.engine_size,
-          color: car.color,
           body_type: car.body_type,
           steering_wheel: car.steering_wheel,
           drive_type: car.drive_type,
@@ -620,7 +618,6 @@ router.get('/:id', async (req, res) => {
         mileage: car.mileage || 0,
         mileage_unit: 'km',
         engine_size: car.engine_size,
-        color: car.color,
         steering_wheel: car.steering_wheel,
         drive_type: car.drive_type,
         interior_color: car.interior_color,
