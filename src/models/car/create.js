@@ -275,11 +275,54 @@ class CarCreate {
         finalSpecParams
       );
 
-      // Create location - removing problematic fields
-      console.log(`[CarCreate] Removing is_transit field from locations table query`);
-      console.log(`[CarCreate] Using 'georgia' value for location_type field from request`);
+      // Create location - first check valid enum values for location_type
+      console.log(`[CarCreate] Checking valid enum values for location_type before insertion`);
       
-      // Use 'georgia' value for location_type since it's passed in the request
+      // First, check what are the valid enum values for location_type
+      const enumQuery = await client.query(`
+        SELECT e.enumlabel
+        FROM pg_type t
+        JOIN pg_enum e ON t.oid = e.enumtypid
+        WHERE t.typname = 'location_type'
+        ORDER BY e.enumsortorder
+      `);
+      
+      // Default to 'transit' if no valid enum values found
+      let validLocationType = 'transit';
+      
+      if (enumQuery.rows.length > 0) {
+        console.log(`[CarCreate] Found valid enum values for location_type:`, enumQuery.rows.map(row => row.enumlabel));
+        // Use the first valid enum value
+        validLocationType = enumQuery.rows[0].enumlabel;
+      } else {
+        // Fallback: check if there's a check constraint that defines valid values
+        console.log(`[CarCreate] No enum values found, checking for check constraints`);
+        const checkConstraintQuery = await client.query(`
+          SELECT pg_get_constraintdef(oid) as constraint_def
+          FROM pg_constraint
+          WHERE conrelid = 'locations'::regclass::oid
+            AND conname LIKE '%location_type%'
+        `);
+        
+        if (checkConstraintQuery.rows.length > 0) {
+          const constraintDef = checkConstraintQuery.rows[0].constraint_def;
+          console.log(`[CarCreate] Found check constraint:`, constraintDef);
+          
+          // Try to extract valid values from the constraint definition
+          const valueMatch = constraintDef.match(/location_type\s*=\s*ANY\s*\(\s*ARRAY\s*\[\s*'([^']+)'(?:\s*,\s*'([^']+)')*\s*\]\s*::/i);
+          if (valueMatch) {
+            const validValues = valueMatch.slice(1).filter(Boolean);
+            console.log(`[CarCreate] Extracted valid values from constraint:`, validValues);
+            if (validValues.length > 0) {
+              validLocationType = validValues[0];
+            }
+          }
+        }
+      }
+      
+      console.log(`[CarCreate] Using '${validLocationType}' value for location_type field`);
+      
+      // Use the valid location_type value
       const locationResult = await client.query(
         `INSERT INTO locations (city, state, country, location_type)
         VALUES ($1, $2, $3, $4) RETURNING id`,
@@ -287,7 +330,7 @@ class CarCreate {
           carData.location.city,
           carData.location.state,
           carData.location.country,
-          'georgia' // Using the value from the request
+          validLocationType // Using a valid enum value
         ]
       );
 
