@@ -360,9 +360,9 @@ class CarCreate {
       // Create car
       const carResult = await client.query(
         `INSERT INTO cars 
-        (brand_id, category_id, location_id, specification_id, model, year, price, 
+        (brand_id, category_id, location_id, specification_id, model, title, year, price, 
         description_ka, description_en, description_ru, status, featured, seller_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING id`,
         [
           carData.brand_id,
@@ -370,6 +370,7 @@ class CarCreate {
           locationResult.rows[0].id,
           specResult.rows[0].id,
           carData.model,
+          carData.title || `${carData.model} ${carData.year}`, // Use provided title or generate one from model and year
           carData.year,
           carData.price,
           carData.description_ka,

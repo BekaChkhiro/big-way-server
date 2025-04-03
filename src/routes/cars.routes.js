@@ -421,6 +421,7 @@ router.get('/', async (req, res) => {
         id: car.id,
         brand: car.brand_name,
         model: car.model,
+        title: car.title, // დავამატეთ title ველი
         year: car.year,
         price: car.price,
         seller_id: car.seller_id,
@@ -507,6 +508,7 @@ router.get('/user', authMiddleware, async (req, res) => {
         id: car.id,
         brand: car.brand_name,
         model: car.model,
+        title: car.title, // დავამატეთ title ველი
         year: car.year,
         price: car.price,
         description_ka: car.description_ka,
@@ -598,6 +600,7 @@ router.get('/:id', async (req, res) => {
       category_id: car.category_id,
       brand: car.brand,
       model: car.model,
+      title: car.title, // დავამატეთ title ველი
       year: car.year,
       price: car.price,
       description_ka: car.description_ka,
