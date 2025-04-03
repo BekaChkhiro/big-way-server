@@ -288,12 +288,12 @@ class CarCreate {
       `);
       
       // Get the location data from the request
-      const { city, state, country } = carData.location;
+      const { city, country } = carData.location;
       
       // Default to 'transit' if no valid enum values found
       let validLocationType = 'transit';
-      let locationState = null;
-      let locationCountry = null;
+      // Always set a default country value to avoid null constraint violation
+      let locationCountry = country || 'საქართველო';
       
       // Get all available enum values
       let availableTypes = [];
@@ -326,38 +326,34 @@ class CarCreate {
         }
       }
       
-      // Determine the appropriate location_type based on provided state and country
-      if (state && country && availableTypes.includes('international')) {
-        // If both state and country are provided, use international
+      // Determine the appropriate location_type based on provided country
+      if (country && availableTypes.includes('international')) {
+        // If country is provided, use international
         validLocationType = 'international';
-        locationState = state;
         locationCountry = country;
-        console.log(`[CarCreate] Using 'international' type with state and country`);
+        console.log(`[CarCreate] Using 'international' type with country: ${locationCountry}`);
       } else if (availableTypes.includes('georgia')) {
-        // If no state and country or only city is provided, use georgia
+        // If no country or only city is provided, use georgia
         validLocationType = 'georgia';
-        locationState = null;
-        locationCountry = null;
-        console.log(`[CarCreate] Using 'georgia' type with null state and country`);
+        locationCountry = 'საქართველო';
+        console.log(`[CarCreate] Using 'georgia' type with default country: ${locationCountry}`);
       } else if (availableTypes.includes('transit')) {
         // Fallback to transit
         validLocationType = 'transit';
-        locationState = null;
-        locationCountry = null;
-        console.log(`[CarCreate] Using 'transit' type with null state and country`);
+        locationCountry = 'საქართველო';
+        console.log(`[CarCreate] Using 'transit' type with default country: ${locationCountry}`);
       }
       
-      console.log(`[CarCreate] Using '${validLocationType}' value for location_type field with state=${locationState}, country=${locationCountry}`);
+      console.log(`[CarCreate] Using '${validLocationType}' value for location_type field with country=${locationCountry}`);
       
-      // Use the valid location_type value with appropriate state and country values
+      // Use the valid location_type value with appropriate country values
       const locationResult = await client.query(
-        `INSERT INTO locations (city, state, country, location_type)
-        VALUES ($1, $2, $3, $4) RETURNING id`,
+        `INSERT INTO locations (city, country, location_type)
+        VALUES ($1, $2, $3) RETURNING id`,
         [
           city,
-          locationState,
           locationCountry,
-          validLocationType // Using a valid enum value with matching state/country
+          validLocationType // Using a valid enum value with matching country
         ]
       );
 

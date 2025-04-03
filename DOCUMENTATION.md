@@ -670,3 +670,72 @@ This section provides instructions for frontend developers on how to integrate w
    - Ensure mobile compatibility with responsive layouts
    - Optimize image loading for different screen sizes
    - Implement touch-friendly controls for mobile users
+
+# მონაცემთა ბაზის მართვა DBeaver-ით
+
+## DBeaver-ის ინსტალაცია
+
+Ubuntu/Linux-ზე DBeaver-ის დასაყენებლად გამოიყენეთ შემდეგი ბრძანება:
+```bash
+sudo snap install dbeaver-ce
+```
+
+## DBeaver-ის კონფიგურაცია
+
+1. გახსენით DBeaver აპლიკაცია
+2. დააჭირეთ "New Database Connection" ღილაკს (ზედა მარცხენა კუთხეში პლუსის ნიშანი)
+3. აირჩიეთ "PostgreSQL" და დააჭირეთ "Next"
+4. შეიყვანეთ შემდეგი პარამეტრები:
+   - Host: `localhost`
+   - Port: `5432`
+   - Database: `big_way_db`
+   - Username: `postgres`
+   - Password: `Lumia635-`
+5. (არასავალდებულო) დააჭირეთ "Test Connection" ღილაკს კავშირის შესამოწმებლად
+6. დააჭირეთ "Finish"
+
+## მონაცემთა ბაზის სტრუქტურის ნახვა
+
+1. გახსენით შექმნილი კავშირი მარცხენა პანელში
+2. გაშალეთ "Schemas" > "public"
+3. აქ ნახავთ ყველა ცხრილს, ინდექსს და სხვა ობიექტებს
+
+## SQL მოთხოვნების გაშვება
+
+1. დააჭირეთ SQL Editor ღილაკს (SQL სკრიპტის იკონი)
+2. ჩაწერეთ SQL მოთხოვნა
+3. გაუშვით მოთხოვნა F5 ღილაკით ან "Execute SQL Statement" ღილაკზე დაჭერით
+
+## მონაცემების დათვალიერება
+
+1. გახსენით სასურველი ცხრილი ორმაგი დაწკაპუნებით
+2. გამოჩნდება ცხრილის მონაცემები
+3. შეგიძლიათ მონაცემების:
+   - დათვალიერება
+   - ფილტრაცია
+   - დალაგება
+   - რედაქტირება
+   - ექსპორტი
+
+## უსაფრთხოების რჩევები
+
+1. არ გააზიაროთ მონაცემთა ბაზის კავშირის პარამეტრები
+2. რეგულარულად შეცვალეთ პაროლი
+3. გამოიყენეთ ძლიერი პაროლები
+4. შეზღუდეთ წვდომა მხოლოდ საჭირო IP მისამართებიდან
+
+## ხშირად გამოყენებული SQL მოთხოვნები
+
+```sql
+-- ყველა მანქანის ნახვა
+SELECT * FROM cars;
+
+-- კონკრეტული ბრენდის მანქანები
+SELECT * FROM cars WHERE brand_id = X;
+
+-- მანქანების რაოდენობა ბრენდების მიხედვით
+SELECT b.name, COUNT(c.id) 
+FROM cars c 
+JOIN brands b ON c.brand_id = b.id 
+GROUP BY b.name;
+```

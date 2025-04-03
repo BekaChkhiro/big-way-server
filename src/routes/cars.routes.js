@@ -67,7 +67,7 @@ router.get('/brands/:brandName/models', async (req, res) => {
         console.log('Found brand with partial match:', partialBrandResult.rows[0]);
         
         // Fetch models for this brand from the database
-        const modelsQuery = 'SELECT name FROM models WHERE brand_id = $1 ORDER BY name';
+        const modelsQuery = 'SELECT name FROM car_models WHERE brand_id = $1 ORDER BY name';
         const modelsResult = await pool.query(modelsQuery, [partialBrandResult.rows[0].id]);
         
         if (modelsResult.rows.length > 0) {
@@ -113,7 +113,7 @@ router.get('/brands/:brandName/models', async (req, res) => {
 
     // Found brand in database, now get models from database
     const brandId = brandResult.rows[0].id;
-    const modelsQuery = 'SELECT name FROM models WHERE brand_id = $1 ORDER BY name';
+    const modelsQuery = 'SELECT name FROM car_models WHERE brand_id = $1 ORDER BY name';
     const modelsResult = await pool.query(modelsQuery, [brandId]);
     
     if (modelsResult.rows.length > 0) {
@@ -233,7 +233,7 @@ router.get('/brands/id/:brandId/models', async (req, res) => {
     console.log('Found brand:', brandResult.rows[0]);
     
     // Get models from the database
-    const modelsQuery = 'SELECT name FROM models WHERE brand_id = $1 ORDER BY name';
+    const modelsQuery = 'SELECT name FROM car_models WHERE brand_id = $1 ORDER BY name';
     const modelsResult = await pool.query(modelsQuery, [brandId]);
     
     if (modelsResult.rows.length > 0) {
@@ -396,7 +396,7 @@ router.get('/', async (req, res) => {
         b.name as brand_name, 
         cat.name as category_name,
         u.id as seller_id,
-        loc.city, loc.state, loc.country,
+        loc.city, loc.country,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
         spec.engine_size, spec.body_type, spec.steering_wheel, 
         spec.drive_type, spec.interior_material, spec.interior_color
@@ -447,7 +447,6 @@ router.get('/', async (req, res) => {
         // Create a properly nested location object
         location: {
           city: car.city,
-          state: car.state,
           country: car.country
         },
         // Format images to match the expected structure
@@ -483,7 +482,7 @@ router.get('/user', authMiddleware, async (req, res) => {
       SELECT c.*, 
         b.name as brand_name, 
         cat.name as category_name,
-        loc.city, loc.state, loc.country,
+        loc.city, loc.country,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
         spec.engine_size, spec.body_type, spec.steering_wheel, 
         spec.drive_type, spec.interior_material, spec.interior_color
@@ -533,7 +532,6 @@ router.get('/user', authMiddleware, async (req, res) => {
         // Create a properly nested location object
         location: {
           city: car.city,
-          state: car.state,
           country: car.country
         },
         // Format images to match the expected structure
@@ -570,7 +568,7 @@ router.get('/:id', async (req, res) => {
         c.*,
         b.name as brand,
         cat.name as category,
-        l.city, l.state, l.country
+        l.city, l.country
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -631,7 +629,6 @@ router.get('/:id', async (req, res) => {
       location: {
         id: car.location_id,
         city: car.city,
-        state: car.state,
         country: car.country
       },
       // Format images to match the expected structure

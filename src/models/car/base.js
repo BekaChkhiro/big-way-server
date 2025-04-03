@@ -201,6 +201,7 @@ class CarModel {
 
   static async getModelsByBrand(brandId) {
     try {
+      // First check if brand exists
       const brandQuery = 'SELECT name FROM brands WHERE id = $1';
       const brandResult = await pool.query(brandQuery, [brandId]);
       
@@ -208,6 +209,16 @@ class CarModel {
         return [];
       }
 
+      // Query car_models table for models associated with this brand
+      const modelsQuery = 'SELECT name FROM car_models WHERE brand_id = $1 ORDER BY name';
+      const modelsResult = await pool.query(modelsQuery, [brandId]);
+      
+      if (modelsResult.rows.length > 0) {
+        return modelsResult.rows.map(row => row.name);
+      }
+      
+      // Fallback to hardcoded models if no database records
+      console.log('No models found in database for brand, using hardcoded fallback');
       const brandName = brandResult.rows[0].name;
       const carModels = require('../../../database/seeds/data/car_models');
       return carModels[brandName] || [];
