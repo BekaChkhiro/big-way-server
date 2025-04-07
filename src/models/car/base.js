@@ -62,6 +62,7 @@ const VALID_INTERIOR_MATERIALS = [
   'cloth',
   'alcantara',
   'vinyl',
+  'fabric',
   'other'
 ];
 
@@ -89,6 +90,7 @@ const VALID_INTERIOR_COLORS = [
   'yellow',
   'orange',
   'purple',
+  'burgundy',
   'gold'
 ];
 
@@ -112,7 +114,7 @@ const BRAND_MODELS = {
   // Aston Martin
   7: ['DB11', 'Vantage', 'DBS', 'DBX', 'Valkyrie', 'Vanquish', 'Rapide', 'DB9', 'DB12'],
   // Audi
-  8: ['A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT', 'S4', 'S6', 'RS4', 'Q8'],
+  8: ['A1', 'A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT', 'S4', 'S6', 'RS4', 'Q8'],
   // Avatr
   9: ['11', '12', 'Concept', 'SUV', 'Sedan'],
   // Baic
@@ -140,10 +142,9 @@ class CarModel {
           'fuel_type', s.fuel_type,
           'mileage', s.mileage,
           'engine_size', s.engine_size,
-          'horsepower', s.horsepower,
           'doors', s.doors,
           'color', s.color,
-          'body_type', s.body_type,
+
           'has_hydraulics', s.has_hydraulics,
           'has_board_computer', s.has_board_computer,
           'has_air_conditioning', s.has_air_conditioning,

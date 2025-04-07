@@ -46,7 +46,7 @@ describe('Wishlist Routes', () => {
       horsepower: 200,
       doors: 4,
       color: 'Red',
-      body_type: 'Sedan',
+
       city: 'Test City',
       state: 'Test State',
       country: 'Test Country'

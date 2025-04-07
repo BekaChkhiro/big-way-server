@@ -23,7 +23,7 @@ describe('Cars Routes', () => {
     horsepower: 200,
     doors: 4,
     color: 'Black',
-    body_type: 'Sedan',
+
     city: 'Test City',
     state: 'Test State',
     country: 'Test Country'

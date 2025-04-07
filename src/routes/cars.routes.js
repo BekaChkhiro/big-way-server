@@ -89,7 +89,7 @@ router.get('/brands/:brandName/models', async (req, res) => {
         'chevrolet': ['Silverado', 'Equinox', 'Tahoe', 'Traverse', 'Malibu', 'Camaro', 'Suburban', 'Colorado', 'Blazer'],
         'bmw': ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X7', 'M3', 'M5', 'i4', 'iX'],
         'mercedes': ['C-Class', 'E-Class', 'S-Class', 'GLC', 'GLE', 'GLS', 'A-Class', 'CLA', 'AMG GT'],
-        'audi': ['A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT'],
+        'audi': ['A1', 'A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT'],
         'volkswagen': ['Golf', 'Passat', 'Tiguan', 'Atlas', 'Jetta', 'Arteon', 'ID.4', 'Taos', 'GTI'],
         'hyundai': ['Elantra', 'Sonata', 'Tucson', 'Santa Fe', 'Palisade', 'Kona', 'Venue', 'Ioniq', 'Genesis'],
         'kia': ['Forte', 'K5', 'Sportage', 'Telluride', 'Sorento', 'Soul', 'Seltos', 'Carnival', 'Stinger']
@@ -133,7 +133,7 @@ router.get('/brands/:brandName/models', async (req, res) => {
       'chevrolet': ['Silverado', 'Equinox', 'Tahoe', 'Traverse', 'Malibu', 'Camaro', 'Suburban', 'Colorado', 'Blazer'],
       'bmw': ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X7', 'M3', 'M5', 'i4', 'iX'],
       'mercedes': ['C-Class', 'E-Class', 'S-Class', 'GLC', 'GLE', 'GLS', 'A-Class', 'CLA', 'AMG GT'],
-      'audi': ['A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT'],
+      'audi': ['A1', 'A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'e-tron', 'RS6', 'TT'],
       'volkswagen': ['Golf', 'Passat', 'Tiguan', 'Atlas', 'Jetta', 'Arteon', 'ID.4', 'Taos', 'GTI'],
       'hyundai': ['Elantra', 'Sonata', 'Tucson', 'Santa Fe', 'Palisade', 'Kona', 'Venue', 'Ioniq'],
       'kia': ['Forte', 'K5', 'Sportage', 'Telluride', 'Sorento', 'Soul', 'Seltos', 'Carnival', 'Stinger'],
@@ -398,7 +398,7 @@ router.get('/', async (req, res) => {
         u.id as seller_id,
         loc.city, loc.country,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
-        spec.engine_size, spec.body_type, spec.steering_wheel, 
+        spec.engine_size, spec.steering_wheel, 
         spec.drive_type, spec.interior_material, spec.interior_color
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
@@ -439,7 +439,7 @@ router.get('/', async (req, res) => {
           fuel_type: car.fuel_type,
           mileage: car.mileage || 0, // Ensure mileage is never undefined
           engine_size: car.engine_size,
-          body_type: car.body_type,
+
           steering_wheel: car.steering_wheel,
           drive_type: car.drive_type,
           interior_material: car.interior_material,
@@ -485,7 +485,7 @@ router.get('/user', authMiddleware, async (req, res) => {
         cat.name as category_name,
         loc.city, loc.country,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
-        spec.engine_size, spec.body_type, spec.steering_wheel, 
+        spec.engine_size, spec.steering_wheel, 
         spec.drive_type, spec.interior_material, spec.interior_color
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
@@ -525,7 +525,7 @@ router.get('/user', authMiddleware, async (req, res) => {
           fuel_type: car.fuel_type,
           mileage: car.mileage || 0, // Ensure mileage is never undefined
           engine_size: car.engine_size,
-          body_type: car.body_type,
+
           steering_wheel: car.steering_wheel,
           drive_type: car.drive_type,
           interior_material: car.interior_material,
@@ -570,11 +570,13 @@ router.get('/:id', async (req, res) => {
         c.*,
         b.name as brand,
         cat.name as category,
-        l.city, l.country
+        l.city, l.country,
+        s.*
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
       LEFT JOIN locations l ON c.location_id = l.id
+      LEFT JOIN specifications s ON c.specification_id = s.id
       WHERE c.id = $1
     `;
     
@@ -614,19 +616,52 @@ router.get('/:id', async (req, res) => {
       // Create a properly nested specifications object
       specifications: {
         id: car.id,
+        engine_type: car.engine_type,
         transmission: car.transmission,
         fuel_type: car.fuel_type,
         mileage: car.mileage || 0,
-        mileage_unit: 'km',
+        mileage_unit: car.mileage_unit || 'km',
         engine_size: car.engine_size,
+        horsepower: car.horsepower,
+        is_turbo: car.is_turbo || false,
+        cylinders: car.cylinders,
+        manufacture_month: car.manufacture_month,
+        color: car.color,
+        body_type: car.body_type,
         steering_wheel: car.steering_wheel,
         drive_type: car.drive_type,
+        has_catalyst: car.has_catalyst || false,
+        airbags_count: car.airbags_count,
+        interior_material: car.interior_material,
         interior_color: car.interior_color,
-        has_navigation: car.has_navigation || false,
-        has_leather_interior: car.has_leather_interior || false,
+        doors: car.doors,
+        has_hydraulics: car.has_hydraulics || false,
+        has_board_computer: car.has_board_computer || false,
+        has_air_conditioning: car.has_air_conditioning || false,
+        has_parking_control: car.has_parking_control || false,
+        has_rear_view_camera: car.has_rear_view_camera || false,
+        has_electric_windows: car.has_electric_windows || false,
+        has_climate_control: car.has_climate_control || false,
+        has_cruise_control: car.has_cruise_control || false,
+        has_start_stop: car.has_start_stop || false,
         has_sunroof: car.has_sunroof || false,
+        has_seat_heating: car.has_seat_heating || false,
+        has_seat_memory: car.has_seat_memory || false,
+        has_abs: car.has_abs || false,
+        has_traction_control: car.has_traction_control || false,
+        has_central_locking: car.has_central_locking || false,
+        has_alarm: car.has_alarm || false,
+        has_fog_lights: car.has_fog_lights || false,
+        has_navigation: car.has_navigation || false,
+        has_aux: car.has_aux || false,
         has_bluetooth: car.has_bluetooth || false,
-        has_rear_view_camera: car.has_rear_view_camera || false
+        has_multifunction_steering_wheel: car.has_multifunction_steering_wheel || false,
+        has_alloy_wheels: car.has_alloy_wheels || false,
+        has_spare_tire: car.has_spare_tire || false,
+        is_disability_adapted: car.is_disability_adapted || false,
+        is_cleared: car.is_cleared || false,
+        has_technical_inspection: car.has_technical_inspection || false,
+        clearance_status: car.clearance_status || 'not_cleared'
       },
       // Create a properly nested location object
       location: {

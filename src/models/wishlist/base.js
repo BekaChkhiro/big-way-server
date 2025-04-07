@@ -16,7 +16,6 @@ class WishlistModel {
           'horsepower', s.horsepower,
           'doors', s.doors,
           'color', s.color,
-          'body_type', s.body_type,
           'clearance_status', s.clearance_status
         ) as specifications,
         json_build_object(

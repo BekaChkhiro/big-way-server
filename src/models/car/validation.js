@@ -51,13 +51,10 @@ class CarValidation {
         throw new Error(`Category with ID ${categoryIdNum} not found. Available categories: ${availableCategories}`);
       }
 
-      // Only check model if carData is provided and has a model property
+      // Log the model but don't validate against a predefined list
       if (carData && carData.model) {
-        // Check if model exists for brand
-        const models = BRAND_MODELS[brandIdNum];
-        if (models && !models.includes(carData.model)) {
-          throw new Error(`Invalid model "${carData.model}" for brand ${brandResult.rows[0].name}. Available models: ${models.join(', ')}`);
-        }
+        console.log(`Model provided: "${carData.model}" for brand ${brandResult.rows[0].name}`);
+        // No validation against predefined models - allow any model
       }
     } catch (error) {
       console.error('Validation error:', error);
@@ -80,32 +77,28 @@ class CarValidation {
       }
     }
 
-    // Validate fuel type
-    if (!VALID_FUEL_TYPES.includes(specs.fuel_type)) {
-      console.log('Invalid fuel_type:', specs.fuel_type);
-      console.log('Valid fuel types:', VALID_FUEL_TYPES);
-      throw new Error(`Invalid fuel_type: "${specs.fuel_type}". Must be one of: ${VALID_FUEL_TYPES.join(', ')}`);
+    // Log the fuel type but don't validate against a predefined list
+    if (specs.fuel_type) {
+      console.log('Fuel type provided:', specs.fuel_type);
+      // No validation against predefined fuel types - allow any value
     }
 
-    // Validate color if provided
-    if (specs.color && !VALID_COLORS.includes(specs.color)) {
-      console.log('Invalid color:', specs.color);
-      console.log('Valid colors:', VALID_COLORS);
-      throw new Error(`Invalid color: "${specs.color}". Must be one of: ${VALID_COLORS.join(', ')}`);
+    // Log the color but don't validate against a predefined list
+    if (specs.color) {
+      console.log('Color provided:', specs.color);
+      // No validation against predefined colors - allow any value
     }
 
-    // Validate interior material if provided
-    if (specs.interior_material && !VALID_INTERIOR_MATERIALS.includes(specs.interior_material)) {
-      console.log('Invalid interior_material:', specs.interior_material);
-      console.log('Valid interior materials:', VALID_INTERIOR_MATERIALS);
-      throw new Error(`Invalid interior_material: "${specs.interior_material}". Must be one of: ${VALID_INTERIOR_MATERIALS.join(', ')}`);
+    // Log the interior material but don't validate against a predefined list
+    if (specs.interior_material) {
+      console.log('Interior material provided:', specs.interior_material);
+      // No validation against predefined materials - allow any value
     }
 
-    // Validate interior color if provided
-    if (specs.interior_color && !VALID_INTERIOR_COLORS.includes(specs.interior_color)) {
-      console.log('Invalid interior_color:', specs.interior_color);
-      console.log('Valid interior colors:', VALID_INTERIOR_COLORS);
-      throw new Error(`Invalid interior_color: "${specs.interior_color}". Must be one of: ${VALID_INTERIOR_COLORS.join(', ')}`);
+    // Log the interior color but don't validate against a predefined list
+    if (specs.interior_color) {
+      console.log('Interior color provided:', specs.interior_color);
+      // No validation against predefined colors - allow any value
     }
 
     // Validate numeric fields

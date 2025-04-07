@@ -77,7 +77,7 @@ class CarSearch {
               s.horsepower,
               s.doors,
               s.color,
-              s.body_type,
+
               s.steering_wheel,
               s.drive_type,
               s.has_catalyst,
@@ -214,7 +214,7 @@ class CarSearch {
     }
 
     const specFields = [
-      'engine_type', 'transmission', 'fuel_type', 'body_type',
+      'engine_type', 'transmission', 'fuel_type',
       'color', 'doors', 'steering_wheel', 'drive_type',
       'interior_material', 'interior_color'
     ];
@@ -287,7 +287,7 @@ class CarSearch {
               s.horsepower,
               s.doors,
               s.color,
-              s.body_type,
+
               s.steering_wheel,
               s.drive_type,
               s.interior_material,
@@ -389,7 +389,7 @@ class CarSearch {
               s.horsepower,
               s.doors,
               s.color,
-              s.body_type,
+
               s.steering_wheel,
               s.drive_type,
               s.interior_material,

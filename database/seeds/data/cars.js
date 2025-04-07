@@ -22,7 +22,7 @@ module.exports = [
       horsepower: 503,
       doors: 2,
       color: 'Frozen Brilliant White',
-      body_type: 'Coupe',
+
       steering_wheel: 'left',
       drive_type: '4x4',
       has_catalyst: true,
@@ -67,7 +67,7 @@ module.exports = [
       horsepower: 1020,
       doors: 4,
       color: 'Deep Blue Metallic',
-      body_type: 'Sedan',
+
       steering_wheel: 'left',
       drive_type: '4x4',
       has_catalyst: false,
@@ -112,7 +112,7 @@ module.exports = [
       horsepower: 502,
       doors: 2,
       color: 'GT Silver Metallic',
-      body_type: 'Coupe',
+
       steering_wheel: 'left',
       drive_type: 'rear',
       has_catalyst: true,
@@ -157,7 +157,7 @@ module.exports = [
       horsepower: 219,
       doors: 5,
       color: 'Blueprint',
-      body_type: 'SUV',
+
       steering_wheel: 'left',
       drive_type: '4x4',
       has_catalyst: true,
@@ -202,7 +202,7 @@ module.exports = [
       horsepower: 301,
       doors: 4,
       color: 'Wind Chill Pearl',
-      body_type: 'Sedan',
+
       steering_wheel: 'left',
       drive_type: 'front',
       has_catalyst: true,

@@ -18,9 +18,9 @@ class CarCreate {
         fuel_type: (carData.specifications?.fuel_type) || carData.fuel_type || 'ბენზინი',
         mileage: Number((carData.specifications?.mileage) || carData.mileage || 0),
         mileage_unit: (carData.specifications?.mileage_unit) || carData.mileage_unit || 'km',
-        engine_size: Number((carData.specifications?.engine_size) || carData.engine_size || 0),
+        engine_size: parseFloat((carData.specifications?.engine_size) || carData.engine_size || 0),
         cylinders: Number((carData.specifications?.cylinders) || carData.cylinders || 0),
-        body_type: (carData.specifications?.body_type) || carData.body_type || 'sedan',
+
         // Sanitize steering_wheel to be only 'left' or 'right'
         steering_wheel: (((carData.specifications?.steering_wheel) || carData.steering_wheel || 'left').toLowerCase().trim() === 'right' ? 'right' : 'left'),
         // Use provided drive_type or default to 'front'
@@ -31,7 +31,7 @@ class CarCreate {
         has_board_computer: Boolean((carData.specifications?.has_board_computer !== undefined ? carData.specifications.has_board_computer : carData.has_board_computer) ?? false),
         has_alarm: Boolean((carData.specifications?.has_alarm !== undefined ? carData.specifications.has_alarm : carData.has_alarm) ?? false),
         doors: (carData.specifications?.doors) || carData.doors || 4,
-        manufacture_month: (carData.specifications?.manufacture_month) || carData.manufacture_month,
+        // manufacture_month ველი არ არსებობს მონაცემთა ბაზაში, ამიტომ ამოვიღეთ
         clearance_status: (carData.specifications?.clearance_status) || carData.clearance_status
         // Add other boolean flags similarly, ensuring they default to false if not provided
       };
@@ -133,6 +133,43 @@ class CarCreate {
       
       console.log('[CarCreate] Normalized mileage_unit value:', specifications.mileage_unit);
 
+      // Ensure engine_size is one of the allowed values for the valid_engine_size constraint
+      if (specifications.engine_size !== undefined) {
+        const engineSize = parseFloat(specifications.engine_size);
+        // Check if it's a valid number
+        if (!isNaN(engineSize)) {
+          // Round to nearest valid value in the constraint
+          // Valid values are from 0.05 to 13.0 with 0.1 increments
+          const validValues = [];
+          for (let i = 0.05; i <= 13.0; i += 0.1) {
+            validValues.push(parseFloat(i.toFixed(2)));
+          }
+          
+          // Find the closest valid value
+          let closestValue = validValues[0];
+          let minDiff = Math.abs(engineSize - closestValue);
+          
+          for (let i = 1; i < validValues.length; i++) {
+            const diff = Math.abs(engineSize - validValues[i]);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closestValue = validValues[i];
+            }
+          }
+          
+          specifications.engine_size = closestValue;
+          console.log(`[CarCreate] Adjusted engine_size to valid value: ${specifications.engine_size}`);
+        } else {
+          specifications.engine_size = 1.6; // Default to 1.6 if invalid
+          console.log(`[CarCreate] Invalid engine_size, defaulting to: ${specifications.engine_size}`);
+        }
+      } else {
+        specifications.engine_size = 1.6; // Default to 1.6 if not provided
+        console.log(`[CarCreate] No engine_size provided, defaulting to: ${specifications.engine_size}`);
+      }
+      
+      console.log('[CarCreate] Final engine_size value:', specifications.engine_size);
+
       // Ensure interior_material is exactly one of the allowed values (no case issues, no hidden chars)
       if (specifications.interior_material) {
         const normalizedInteriorMaterial = specifications.interior_material.trim();
@@ -165,6 +202,8 @@ class CarCreate {
       
       console.log('[CarCreate] Normalized doors value:', specifications.doors);
 
+      // manufacture_month field has been removed as it's no longer needed
+
       // Ensure airbags_count is within the allowed range (0-12)
       if (specifications.airbags_count !== undefined) {
         const airbagCount = Number(specifications.airbags_count);
@@ -178,20 +217,6 @@ class CarCreate {
       }
       
       console.log('[CarCreate] Normalized airbags_count value:', specifications.airbags_count);
-
-      // Ensure manufacture_month is within the allowed range (1-12)
-      if (specifications.manufacture_month !== undefined) {
-        const month = Number(specifications.manufacture_month);
-        if (!isNaN(month) && month >= 1 && month <= 12) {
-          specifications.manufacture_month = month;
-        } else {
-          specifications.manufacture_month = 1; // Default to January if invalid
-        }
-      } else {
-        specifications.manufacture_month = 1; // Default to January if not provided
-      }
-      
-      console.log('[CarCreate] Normalized manufacture_month value:', specifications.manufacture_month);
 
       // Ensure clearance_status is exactly one of the allowed values
       if (specifications.clearance_status) {
@@ -219,22 +244,34 @@ class CarCreate {
       // Create parameters WITHOUT the steering_wheel, transmission, and doors fields
       const finalSpecParams = [
         specifications.engine_type,
-        // transmission removed
         specifications.fuel_type,
         specifications.mileage,
         specifications.mileage_unit,
         specifications.engine_size,
         specifications.cylinders,
-        specifications.body_type,
-        // steering_wheel removed
         specifications.drive_type,
         specifications.airbags_count,
         specifications.interior_material,
         specifications.interior_color,
         specifications.has_board_computer,
         specifications.has_alarm,
-        // doors removed
-        specifications.manufacture_month,
+        specifications.has_air_conditioning,
+        specifications.has_parking_control,
+        specifications.has_rear_view_camera,
+        specifications.has_electric_windows,
+        specifications.has_climate_control,
+        specifications.has_cruise_control,
+        specifications.has_start_stop,
+        specifications.has_sunroof,
+        specifications.has_seat_heating,
+        specifications.has_abs,
+        specifications.has_traction_control,
+        specifications.has_central_locking,
+        specifications.has_fog_lights,
+        specifications.has_navigation,
+        specifications.has_bluetooth,
+        specifications.has_technical_inspection,
+        // manufacture_month removed as it doesn't exist in the database
         specifications.clearance_status
       ];
       
@@ -252,9 +289,15 @@ class CarCreate {
       const specResult = await client.query(
         `INSERT INTO specifications 
         (engine_type, fuel_type, mileage, mileage_unit, 
-        engine_size, cylinders, body_type, drive_type,
+        engine_size, cylinders, drive_type,
         airbags_count, interior_material, interior_color,
-        has_board_computer, has_alarm, manufacture_month, clearance_status)
+        has_board_computer, has_alarm, has_air_conditioning,
+        has_parking_control, has_rear_view_camera, has_electric_windows,
+        has_climate_control, has_cruise_control, has_start_stop,
+        has_sunroof, has_seat_heating,
+        has_abs, has_traction_control, has_central_locking,
+        has_fog_lights, has_navigation, has_bluetooth,
+        has_technical_inspection, clearance_status)
         VALUES 
         ($1 /* engine_type */, 
          $2 /* fuel_type */, 
@@ -262,15 +305,29 @@ class CarCreate {
          $4 /* mileage_unit */, 
          $5 /* engine_size */, 
          $6 /* cylinders */, 
-         $7 /* body_type */, 
-         $8 /* drive_type */, 
-         $9 /* airbags_count */, 
-         $10 /* interior_material */, 
-         $11 /* interior_color */, 
-         $12 /* has_board_computer */, 
-         $13 /* has_alarm */, 
-         $14 /* manufacture_month */, 
-         $15 /* clearance_status */)
+         $7 /* drive_type */, 
+         $8 /* airbags_count */, 
+         $9 /* interior_material */, 
+         $10 /* interior_color */, 
+         $11 /* has_board_computer */, 
+         $12 /* has_alarm */,
+         $13 /* has_air_conditioning */,
+         $14 /* has_parking_control */,
+         $15 /* has_rear_view_camera */,
+         $16 /* has_electric_windows */,
+         $17 /* has_climate_control */,
+         $18 /* has_cruise_control */,
+         $19 /* has_start_stop */,
+         $20 /* has_sunroof */,
+         $21 /* has_seat_heating */,
+         $22 /* has_abs */,
+         $23 /* has_traction_control */,
+         $24 /* has_central_locking */,
+         $25 /* has_fog_lights */,
+         $26 /* has_navigation */,
+         $27 /* has_bluetooth */,
+         $28 /* has_technical_inspection */,
+         $29 /* clearance_status */)
         RETURNING id`,
         finalSpecParams
       );
