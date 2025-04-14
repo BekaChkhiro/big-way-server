@@ -1,11 +1,12 @@
 const swaggerJsdoc = require('swagger-jsdoc');
+
 const options = {
   definition: {
     openapi: '3.0.0',
     info: {
       title: 'Big Way API Documentation',
       version: '1.0.0',
-      description: 'Documentation for the Big Way car dealership API',
+      description: 'Documentation for the Big Way car marketplace API',
     },
     servers: [
       {
@@ -47,6 +48,7 @@ const options = {
             },
             mileage: {
               type: 'integer',
+              minimum: 0,
             },
             mileage_unit: {
               type: 'string',
@@ -55,9 +57,9 @@ const options = {
             engine_size: {
               type: 'number',
               format: 'float',
-            },
-            horsepower: {
-              type: 'integer',
+              minimum: 0.05,
+              maximum: 13.0,
+              multipleOf: 0.1,
             },
             doors: {
               type: 'integer',
@@ -68,16 +70,9 @@ const options = {
             },
             cylinders: {
               type: 'integer',
-            },
-            manufacture_month: {
-              type: 'integer',
-              minimum: 1,
-              maximum: 12,
+              minimum: 0,
             },
             color: {
-              type: 'string',
-            },
-            body_type: {
               type: 'string',
             },
             steering_wheel: {
@@ -175,7 +170,11 @@ const options = {
             },
             is_disability_adapted: {
               type: 'boolean'
-            }
+            },
+            clearance_status: {
+              type: 'string',
+              enum: ['cleared', 'not_cleared', 'in_progress']
+            },
           },
         },
         Car: {
@@ -194,14 +193,17 @@ const options = {
             model: {
               type: 'string',
             },
+            title: {
+              type: 'string',
+            },
             year: {
               type: 'integer',
+              minimum: 1900,
+              maximum: 2025,
             },
             price: {
               type: 'number',
-            },
-            description: {
-              type: 'string',
+              minimum: 0,
             },
             description_en: {
               type: 'string',
@@ -218,15 +220,22 @@ const options = {
             status: {
               type: 'string',
               enum: ['available', 'sold', 'pending'],
+              default: 'available'
             },
             featured: {
               type: 'boolean',
+              default: false
+            },
+            views_count: {
+              type: 'integer',
+              minimum: 0,
             },
             specifications: {
               $ref: '#/components/schemas/Specifications',
             },
             location: {
               type: 'object',
+              required: ['city'],
               properties: {
                 city: {
                   type: 'string',
@@ -237,8 +246,49 @@ const options = {
                 country: {
                   type: 'string',
                 },
+                location_type: {
+                  type: 'string',
+                  enum: ['transit', 'georgia', 'international']
+                },
               },
             },
+            images: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: {
+                    type: 'integer'
+                  },
+                  image_url: {
+                    type: 'string'
+                  },
+                  thumbnail_url: {
+                    type: 'string'
+                  },
+                  medium_url: {
+                    type: 'string'
+                  },
+                  large_url: {
+                    type: 'string'
+                  },
+                  is_primary: {
+                    type: 'boolean'
+                  }
+                }
+              }
+            },
+            seller_id: {
+              type: 'integer'
+            },
+            created_at: {
+              type: 'string',
+              format: 'date-time'
+            },
+            updated_at: {
+              type: 'string',
+              format: 'date-time'
+            }
           },
         },
         Brand: {
@@ -250,11 +300,30 @@ const options = {
             name: {
               type: 'string',
             },
+            created_at: {
+              type: 'string',
+              format: 'date-time'
+            }
           },
         },
-        Model: {
-          type: 'string',
-          description: 'Car model name',
+        Category: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+            },
+            name: {
+              type: 'string',
+            },
+            type: {
+              type: 'string',
+              enum: ['car', 'special_equipment', 'moto']
+            },
+            created_at: {
+              type: 'string',
+              format: 'date-time'
+            }
+          },
         },
         User: {
           type: 'object',
@@ -279,10 +348,12 @@ const options = {
               minLength: 6
             },
             first_name: {
-              type: 'string'
+              type: 'string',
+              maxLength: 50
             },
             last_name: {
-              type: 'string'
+              type: 'string',
+              maxLength: 50
             },
             age: {
               type: 'integer',
@@ -290,7 +361,7 @@ const options = {
             },
             gender: {
               type: 'string',
-              enum: ['male', 'female', 'other']
+              enum: ['male', 'female']
             },
             phone: {
               type: 'string',
@@ -350,6 +421,12 @@ const options = {
           properties: {
             message: {
               type: 'string'
+            },
+            errors: {
+              type: 'array',
+              items: {
+                type: 'string'
+              }
             }
           }
         }
@@ -364,6 +441,10 @@ const options = {
  * tags:
  *   - name: Cars
  *     description: Car listings management
+ *   - name: Auth
+ *     description: Authentication operations
+ *   - name: Wishlist
+ *     description: Wishlist management
  * 
  * /api/cars:
  *   get:
@@ -393,7 +474,7 @@ const options = {
  *           enum: [ASC, DESC]
  *           default: DESC
  *       - in: query
- *         name: type
+ *         name: searchQuery
  *         schema:
  *           type: string
  *       - in: query
@@ -426,7 +507,7 @@ const options = {
  *           type: string
  *     responses:
  *       200:
- *         description: List of cars
+ *         description: List of cars with pagination
  *         content:
  *           application/json:
  *             schema:
@@ -469,7 +550,7 @@ const options = {
  *         description: Invalid input
  *       401:
  *         description: Not authenticated
- *
+ * 
  * /api/cars/{id}:
  *   get:
  *     summary: Get car by ID
@@ -541,7 +622,7 @@ const options = {
  *         description: Not authorized
  *       404:
  *         description: Car not found
- *
+ * 
  * /api/cars/{id}/images:
  *   post:
  *     summary: Upload images for car
@@ -566,6 +647,9 @@ const options = {
  *                 items:
  *                   type: string
  *                   format: binary
+ *               primary_image_index:
+ *                 type: integer
+ *                 description: Index of the primary image (0-based)
  *     responses:
  *       200:
  *         description: Images uploaded successfully
@@ -577,7 +661,9 @@ const options = {
  *         description: Not authenticated
  *       403:
  *         description: Not authorized
- *
+ *       404:
+ *         description: Car not found
+ * 
  * /api/cars/{id}/similar:
  *   get:
  *     summary: Get similar cars
@@ -604,7 +690,7 @@ const options = {
  *                 $ref: '#/components/schemas/Car'
  *       404:
  *         description: Car not found
- *
+ * 
  * /api/cars/brands:
  *   get:
  *     summary: Get all car brands
@@ -618,7 +704,7 @@ const options = {
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/Brand'
- *
+ * 
  * /api/cars/categories:
  *   get:
  *     summary: Get all car categories
@@ -631,14 +717,137 @@ const options = {
  *             schema:
  *               type: array
  *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: integer
- *                   name:
- *                     type: string
- *                   type:
- *                     type: string
+ *                 $ref: '#/components/schemas/Category'
+ * 
+ * /api/auth/register:
+ *   post:
+ *     summary: Register new user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/User'
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UserResponse'
+ *       400:
+ *         description: Invalid input
+ * 
+ * /api/auth/login:
+ *   post:
+ *     summary: Login user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UserResponse'
+ *       401:
+ *         description: Invalid credentials
+ * 
+ * /api/auth/me:
+ *   get:
+ *     summary: Get current user profile
+ *     tags: [Auth]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Not authenticated
+ * 
+ * /api/wishlist:
+ *   get:
+ *     summary: Get user's wishlist
+ *     tags: [Wishlist]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User's wishlist
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/WishlistItem'
+ *       401:
+ *         description: Not authenticated
+ *   post:
+ *     summary: Add car to wishlist
+ *     tags: [Wishlist]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [car_id]
+ *             properties:
+ *               car_id:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Car added to wishlist
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/WishlistItem'
+ *       400:
+ *         description: Invalid input or car already in wishlist
+ *       401:
+ *         description: Not authenticated
+ *       404:
+ *         description: Car not found
+ * 
+ * /api/wishlist/{carId}:
+ *   delete:
+ *     summary: Remove car from wishlist
+ *     tags: [Wishlist]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: carId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       204:
+ *         description: Car removed from wishlist
+ *       401:
+ *         description: Not authenticated
+ *       404:
+ *         description: Car not found in wishlist
  */
 
 module.exports = swaggerJsdoc(options);

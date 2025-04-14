@@ -7,17 +7,23 @@ class WishlistOperations {
     try {
       await client.query('BEGIN');
 
-      // Check if already exists
-      const exists = await WishlistModel.exists(userId, carId);
-      if (exists) {
-        throw new Error('Car already in wishlist');
+      // First verify the car exists
+      const carCheck = await client.query('SELECT id FROM cars WHERE id = $1', [carId]);
+      if (carCheck.rows.length === 0) {
+        throw new Error('Car not found');
+      }
+
+      // Then verify user exists
+      const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+      if (userCheck.rows.length === 0) {
+        throw new Error('User not found');
       }
 
       // Add to wishlist
       const query = `
         INSERT INTO wishlists (user_id, car_id)
         VALUES ($1, $2)
-        RETURNING *
+        RETURNING id, created_at
       `;
       const result = await client.query(query, [userId, carId]);
 
@@ -25,6 +31,9 @@ class WishlistOperations {
       return result.rows[0];
     } catch (error) {
       await client.query('ROLLBACK');
+      if (error.code === '23505') { // unique_violation
+        throw new Error('Car already in wishlist');
+      }
       throw error;
     } finally {
       client.release();
@@ -36,7 +45,6 @@ class WishlistOperations {
     try {
       await client.query('BEGIN');
 
-      // Remove from wishlist
       const query = `
         DELETE FROM wishlists
         WHERE user_id = $1 AND car_id = $2
@@ -62,6 +70,12 @@ class WishlistOperations {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Verify user exists
+      const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+      if (userCheck.rows.length === 0) {
+        throw new Error('User not found');
+      }
 
       // Clear user's wishlist
       const query = 'DELETE FROM wishlists WHERE user_id = $1';
