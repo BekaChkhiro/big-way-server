@@ -199,8 +199,44 @@ const setCacheHeaders = (req, res, next) => {
   next();
 };
 
+// Handle single file upload (for advertisements)
+async function uploadToS3(file) {
+  if (!file) {
+    throw new Error('No file provided');
+  }
+
+  console.log(`Uploading single file: ${file.originalname}, size: ${file.size}`);
+  const timestamp = Date.now();
+  const cleanFileName = path.basename(file.originalname).replace(/[^a-zA-Z0-9]/g, '');
+  const filename = `${timestamp}-${cleanFileName}.webp`;
+
+  try {
+    const buffer = await sharp(file.buffer)
+      .webp({ quality: 80 })
+      .toBuffer();
+    
+    const key = `advertisements/${filename}`;
+    console.log(`Uploading advertisement image to S3: ${key}, bucket: ${bucket}`);
+    
+    const uploadResult = await s3.upload({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: 'image/webp',
+      CacheControl: 'max-age=31536000'
+    }).promise();
+    
+    console.log('Advertisement image upload success:', uploadResult.Location);
+    return uploadResult;
+  } catch (error) {
+    console.error('Error uploading advertisement image to S3:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   upload,
   processAndUpload,
-  setCacheHeaders
+  setCacheHeaders,
+  uploadToS3
 };
