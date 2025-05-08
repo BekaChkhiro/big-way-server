@@ -9,6 +9,8 @@ const authRoutes = require('./routes/auth.routes');
 const carsRoutes = require('./routes/cars.routes');
 const wishlistRoutes = require('./routes/wishlist.routes');
 const advertisementsRoutes = require('./routes/advertisements.routes');
+const vipRoutes = require('./routes/vip.routes');
+const balanceRoutes = require('./routes/balance.routes');
 const specs = require('./docs/swagger');
 const pool = require('../config/db.config');
 
@@ -84,6 +86,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/cars', carsRoutes); 
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/advertisements', advertisementsRoutes);
+app.use('/api/vip', vipRoutes);
+app.use('/api/balance', balanceRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Big Way API' });

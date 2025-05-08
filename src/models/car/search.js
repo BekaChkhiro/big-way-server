@@ -49,7 +49,7 @@ class CarSearch {
       paramCounter++;
     }
     if (filters.location) {
-      filterConditions.push(`(l.city ILIKE $${paramCounter} OR l.state ILIKE $${paramCounter} OR l.country ILIKE $${paramCounter})`);
+      filterConditions.push(`(l.city ILIKE $${paramCounter} OR l.country ILIKE $${paramCounter})`);
       params.push(`%${filters.location}%`);
       paramCounter++;
     }
@@ -69,24 +69,21 @@ class CarSearch {
           FROM (
             SELECT 
               s.id,
-              s.engine_type,
-              s.transmission,
-              s.fuel_type,
               s.mileage,
-              s.engine_size,
-              s.horsepower,
-              s.doors,
-              s.color,
-
-              s.steering_wheel,
+              s.fuel_type,
+              s.transmission,
+              s.engine_type,
               s.drive_type,
-              s.has_catalyst,
-              s.airbags_count,
-              s.interior_material,
+              s.body_type,
               s.interior_color,
-              s.is_turbo,
-              s.cylinders,
-              s.manufacture_month
+              s.color,
+              s.has_navigation,
+              s.has_bluetooth,
+              s.has_sunroof,
+              s.has_air_conditioning,
+              s.has_parking_control,
+              s.has_rear_view_camera,
+              s.has_seat_heating
             FROM specifications s 
             WHERE s.id = c.specification_id
           ) spec
@@ -97,8 +94,9 @@ class CarSearch {
             SELECT 
               l.id,
               l.city,
-              l.state,
-              l.country
+              l.country,
+              l.location_type,
+              l.is_transit
             FROM locations l 
             WHERE l.id = c.location_id
           ) loc

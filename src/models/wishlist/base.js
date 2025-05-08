@@ -21,36 +21,51 @@ class WishlistModel {
             c.*,
             b.name as brand,
             cat.name as category,
-            s.id as specification_id,
-            l.id as location_id
+            s.id as spec_id,
+            l.id as loc_id
           FROM wishlists w
           LEFT JOIN cars c ON w.car_id = c.id
           LEFT JOIN brands b ON c.brand_id = b.id
           LEFT JOIN categories cat ON c.category_id = cat.id
           LEFT JOIN specifications s ON c.specification_id = s.id
           LEFT JOIN locations l ON c.location_id = l.id
-          WHERE w.user_id = $1
+          WHERE w.user_id = $1 AND c.id IS NOT NULL
         )
         SELECT 
-          wi.*,
+          wi.wishlist_id,
+          wi.car_id as id,
+          wi.brand_id,
+          wi.category_id,
+          wi.model,
+          wi.year,
+          wi.price,
+          wi.currency,
+          wi.title,
+          wi.description_ka,
+          wi.description_en,
+          wi.seller_id,
+          wi.featured,
+          wi.status,
+          wi.created_at,
+          wi.updated_at,
+          wi.added_to_wishlist_at,
+          wi.brand,
+          wi.category,
           jsonb_build_object(
             'id', s.id,
-            'engine_type', s.engine_type,
-            'transmission', s.transmission,
-            'fuel_type', s.fuel_type,
             'mileage', s.mileage,
-            'engine_size', s.engine_size,
-            'doors', s.doors,
-            'color', s.color,
-            'clearance_status', s.clearance_status
+            'fuel_type', s.fuel_type,
+            'transmission', s.transmission,
+            'engine_type', s.engine_type,
+            'drive_type', s.drive_type,
+            'interior_color', s.interior_color,
+            'color', s.color
           ) as specifications,
           jsonb_build_object(
             'id', l.id,
             'city', l.city,
-            'state', l.state,
             'country', l.country,
-            'location_type', l.location_type,
-            'is_transit', l.is_transit
+            'location_type', l.location_type
           ) as location,
           COALESCE(
             (
@@ -58,7 +73,7 @@ class WishlistModel {
                 jsonb_build_object(
                   'id', ci.id,
                   'car_id', ci.car_id,
-                  'url', ci.url,
+                  'url', ci.image_url,
                   'thumbnail_url', ci.thumbnail_url,
                   'medium_url', ci.medium_url,
                   'large_url', ci.large_url,
@@ -71,8 +86,8 @@ class WishlistModel {
             '[]'::jsonb
           ) as images
         FROM wishlist_items wi
-        LEFT JOIN specifications s ON wi.specification_id = s.id
-        LEFT JOIN locations l ON wi.location_id = l.id
+        LEFT JOIN specifications s ON s.id = wi.spec_id
+        LEFT JOIN locations l ON l.id = wi.loc_id
         ORDER BY wi.added_to_wishlist_at DESC;
       `;
       
@@ -80,15 +95,21 @@ class WishlistModel {
       const result = await client.query(query, [userId]);
       console.log('Wishlist query result rows:', result.rows.length);
       
-      // Transform the result to match the expected format
+      // Transform the result to ensure proper format for frontend
       const transformedRows = result.rows.map(row => ({
-        id: row.car_id,
+        id: row.id, // This is car_id
         brand_id: row.brand_id,
         category_id: row.category_id,
         model: row.model,
+        title: row.title || `${row.brand || ''} ${row.model || ''}`,
         year: row.year,
         price: row.price,
-        status: row.status,
+        currency: row.currency || 'GEL',
+        description_ka: row.description_ka || '',
+        description_en: row.description_en || '',
+        status: row.status || 'available',
+        featured: row.featured || false,
+        seller_id: row.seller_id || 0,
         created_at: row.created_at,
         updated_at: row.updated_at,
         brand: row.brand,

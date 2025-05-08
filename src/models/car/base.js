@@ -18,6 +18,9 @@ const VALID_FUEL_TYPES = [
   'cng'
 ];
 
+// VIP status types
+const VIP_STATUS_TYPES = ['none', 'vip', 'vip_plus', 'super_vip'];
+
 // Valid colors
 const VALID_COLORS = [
   'თეთრი',
@@ -134,55 +137,50 @@ const BRAND_MODELS = {
 class CarModel {
   static async findById(id) {
     const query = `
-      SELECT c.*, 
+      SELECT 
+        c.*,
+        b.name as brand,
+        cat.name as category,
         json_build_object(
           'id', s.id,
-          'engine_type', s.engine_type,
-          'transmission', s.transmission,
-          'fuel_type', s.fuel_type,
           'mileage', s.mileage,
-          'engine_size', s.engine_size,
-          'doors', s.doors,
+          'fuel_type', s.fuel_type,
+          'transmission', s.transmission,
+          'engine_type', s.engine_type,
+          'drive_type', s.drive_type, 
+          'interior_color', s.interior_color,
           'color', s.color,
-
-          'has_hydraulics', s.has_hydraulics,
-          'has_board_computer', s.has_board_computer,
+          'has_navigation', s.has_navigation,
+          'has_bluetooth', s.has_bluetooth,
+          'has_sunroof', s.has_sunroof,
           'has_air_conditioning', s.has_air_conditioning,
           'has_parking_control', s.has_parking_control,
           'has_rear_view_camera', s.has_rear_view_camera,
-          'has_electric_windows', s.has_electric_windows,
-          'has_climate_control', s.has_climate_control,
-          'has_cruise_control', s.has_cruise_control,
-          'has_start_stop', s.has_start_stop,
-          'has_sunroof', s.has_sunroof,
-          'has_seat_heating', s.has_seat_heating,
-          'has_seat_memory', s.has_seat_memory,
-          'has_abs', s.has_abs,
-          'has_traction_control', s.has_traction_control,
-          'has_central_locking', s.has_central_locking,
-          'has_alarm', s.has_alarm,
-          'has_fog_lights', s.has_fog_lights,
-          'has_navigation', s.has_navigation,
-          'has_aux', s.has_aux,
-          'has_bluetooth', s.has_bluetooth,
-          'has_multifunction_steering_wheel', s.has_multifunction_steering_wheel,
-          'has_alloy_wheels', s.has_alloy_wheels,
-          'has_spare_tire', s.has_spare_tire,
-          'is_disability_adapted', s.is_disability_adapted
+          'has_seat_heating', s.has_seat_heating
         ) as specifications,
         json_build_object(
           'id', l.id,
           'city', l.city,
-          'state', l.state,
-          'country', l.country
+          'country', l.country,
+          'location_type', l.location_type
         ) as location,
-        json_agg(DISTINCT ci.*) as images,
-        b.name as brand_name,
-        cat.name as category_name
+        COALESCE(
+          (SELECT json_agg(
+            json_build_object(
+              'id', ci.id,
+              'car_id', ci.car_id,
+              'url', ci.image_url,
+              'thumbnail_url', ci.thumbnail_url,
+              'medium_url', ci.medium_url,
+              'large_url', ci.large_url,
+              'is_primary', ci.is_primary
+            )
+          ) FROM car_images ci WHERE ci.car_id = c.id),
+          '[]'
+        ) as images
       FROM cars c
       LEFT JOIN specifications s ON c.specification_id = s.id
       LEFT JOIN locations l ON c.location_id = l.id
-      LEFT JOIN car_images ci ON c.id = ci.car_id
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
       WHERE c.id = $1
@@ -229,6 +227,94 @@ class CarModel {
     }
   }
 
+  static async getCategories() {
+    console.log('Fetching categories from database...');
+    const query = 'SELECT * FROM categories ORDER BY name ASC';
+    const result = await pool.query(query);
+    console.log('Available categories:', result.rows);
+    return result.rows;
+  }
+
+  static async getDoors() {
+    console.log('Fetching door counts from database...');
+    const query = 'SELECT * FROM door_counts ORDER BY id ASC';
+    const result = await pool.query(query);
+    console.log('Available door counts:', result.rows);
+    return result.rows;
+  }
+
+  static async updateVipStatus(carId, vipStatus, expirationDate = null) {
+    // Validate VIP status
+    if (!VIP_STATUS_TYPES.includes(vipStatus)) {
+      throw new Error(`Invalid VIP status: ${vipStatus}. Valid options are: ${VIP_STATUS_TYPES.join(', ')}`);
+    }
+    
+    const query = `
+      UPDATE cars
+      SET 
+        vip_status = $1::vip_status,
+        vip_expiration_date = $2,
+        updated_at = NOW()
+      WHERE id = $3
+      RETURNING id, vip_status, vip_expiration_date
+    `;
+    
+    const result = await pool.query(query, [vipStatus, expirationDate, carId]);
+    
+    if (result.rowCount === 0) {
+      throw new Error(`Car with ID ${carId} not found`);
+    }
+    
+    return result.rows[0];
+  }
+
+  static async getCarsByVipStatus(vipStatus, limit = 10, offset = 0) {
+    // Validate VIP status
+    if (!VIP_STATUS_TYPES.includes(vipStatus)) {
+      throw new Error(`Invalid VIP status: ${vipStatus}. Valid options are: ${VIP_STATUS_TYPES.join(', ')}`);
+    }
+    
+    const query = `
+      SELECT 
+        c.*,
+        b.name as brand,
+        cat.name as category,
+        COALESCE(
+          (SELECT json_agg(
+            json_build_object(
+              'id', ci.id, 
+              'url', ci.image_url,
+              'thumbnail_url', ci.thumbnail_url
+            )
+          ) FROM car_images ci WHERE ci.car_id = c.id),
+          '[]'
+        ) as images
+      FROM cars c
+      LEFT JOIN brands b ON c.brand_id = b.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      WHERE c.vip_status = $1::vip_status
+      AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW())
+      ORDER BY c.updated_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+    
+    const countQuery = `
+      SELECT COUNT(*) FROM cars
+      WHERE vip_status = $1::vip_status
+      AND (vip_expiration_date IS NULL OR vip_expiration_date > NOW())
+    `;
+    
+    const [result, countResult] = await Promise.all([
+      pool.query(query, [vipStatus, limit, offset]),
+      pool.query(countQuery, [vipStatus])
+    ]);
+    
+    return {
+      cars: result.rows,
+      total: parseInt(countResult.rows[0].count)
+    };
+  }
+
   static async incrementViews(id) {
     const query = 'UPDATE cars SET views_count = views_count + 1 WHERE id = $1';
     await pool.query(query, [id]);
@@ -240,6 +326,8 @@ class CarModel {
   }
 }
 
+
+
 module.exports = {
   CarModel,
   VALID_FUEL_TYPES,
@@ -247,5 +335,6 @@ module.exports = {
   VALID_INTERIOR_MATERIALS,
   VALID_INTERIOR_COLORS,
   VALID_CLEARANCE_STATUSES,
-  BRAND_MODELS
+  BRAND_MODELS,
+  VIP_STATUS_TYPES
 };

@@ -58,6 +58,28 @@ router.get('/check/:carId', authMiddleware, async (req, res) => {
   }
 });
 
+// Alternative endpoint for compatibility with tests
+router.get('/:carId/check', authMiddleware, async (req, res) => {
+  try {
+    if (!req.params.carId || isNaN(parseInt(req.params.carId))) {
+      return res.status(400).json({ message: 'Invalid car ID' });
+    }
+
+    const exists = await WishlistModel.isInWishlist(req.user.id, parseInt(req.params.carId));
+    res.json({ isInWishlist: exists });
+  } catch (error) {
+    logger.error('Error checking wishlist:', {
+      userId: req.user?.id,
+      carId: req.params.carId,
+      error: error.message
+    });
+    res.status(500).json({ 
+      message: 'Failed to check wishlist status',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Add to wishlist
 router.post('/:carId', authMiddleware, async (req, res) => {
   try {
@@ -65,9 +87,18 @@ router.post('/:carId', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Invalid car ID' });
     }
 
+    // Check if car is already in wishlist
+    const isInWishlist = await WishlistModel.isInWishlist(req.user.id, parseInt(req.params.carId));
+    if (isInWishlist) {
+      return res.status(400).json({ message: 'Car is already in wishlist' });
+    }
+
     logger.info(`Adding car ${req.params.carId} to wishlist for user ${req.user.id}`);
     const wishlistItem = await WishlistModel.addToWishlist(req.user.id, parseInt(req.params.carId));
-    res.status(201).json(wishlistItem);
+    res.status(200).json({ 
+      message: 'Car added to wishlist successfully',
+      wishlistItem: wishlistItem
+    });
   } catch (error) {
     logger.error('Error adding to wishlist:', {
       userId: req.user?.id,
@@ -94,9 +125,15 @@ router.delete('/:carId', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Invalid car ID' });
     }
 
+    // Check if car is in wishlist first
+    const isInWishlist = await WishlistModel.isInWishlist(req.user.id, parseInt(req.params.carId));
+    if (!isInWishlist) {
+      return res.status(404).json({ message: 'Car not found in wishlist' });
+    }
+
     logger.info(`Removing car ${req.params.carId} from wishlist for user ${req.user.id}`);
     await WishlistModel.removeFromWishlist(req.user.id, parseInt(req.params.carId));
-    res.status(204).send();
+    res.status(200).json({ message: 'Car removed from wishlist successfully' });
   } catch (error) {
     logger.error('Error removing from wishlist:', {
       userId: req.user?.id,
@@ -104,7 +141,7 @@ router.delete('/:carId', authMiddleware, async (req, res) => {
       error: error.message
     });
     if (error.message.includes('not found in wishlist')) {
-      return res.status(404).json({ message: error.message });
+      return res.status(404).json({ message: 'Car not found in wishlist' });
     }
     res.status(500).json({ 
       message: 'Failed to remove from wishlist',
@@ -118,7 +155,7 @@ router.delete('/', authMiddleware, async (req, res) => {
   try {
     logger.info(`Clearing wishlist for user ${req.user.id}`);
     await WishlistModel.deleteAll(req.user.id);
-    res.status(204).send();
+    res.status(200).json({ message: 'Wishlist cleared successfully' });
   } catch (error) {
     logger.error('Error clearing wishlist:', {
       userId: req.user?.id,

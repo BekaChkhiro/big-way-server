@@ -486,7 +486,8 @@ router.get('/user', authMiddleware, async (req, res) => {
         loc.city, loc.country,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
         spec.engine_size, spec.steering_wheel, 
-        spec.drive_type, spec.interior_material, spec.interior_color
+        spec.drive_type, spec.interior_material, spec.interior_color,
+        c.vip_status, c.vip_expiration_date
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -516,6 +517,8 @@ router.get('/user', authMiddleware, async (req, res) => {
         description_ru: car.description_ru,
         status: car.status,
         featured: car.featured,
+        vip_status: car.vip_status || 'none',
+        vip_expiration_date: car.vip_expiration_date,
         created_at: car.created_at,
         updated_at: car.updated_at,
         // Create a properly nested specifications object
@@ -551,6 +554,29 @@ router.get('/user', authMiddleware, async (req, res) => {
     res.json(cars);
   } catch (error) {
     console.error('Error fetching user cars:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Get user's favorite cars
+router.get('/favorites', authMiddleware, async (req, res) => {
+  try {
+    console.log('Fetching favorites for user ID:', req.user.id);
+
+    // Import WishlistModel if not already imported
+    const WishlistModel = require('../models/wishlist.model');
+    
+    // Get the user's wishlist
+    const wishlistItems = await WishlistModel.findUserWishlist(req.user.id);
+    console.log(`Found ${wishlistItems.length} wishlist items for user ${req.user.id}`);
+
+    // Return the wishlist items as cars
+    res.json(wishlistItems);
+  } catch (error) {
+    console.error('Error fetching favorites:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error'
