@@ -114,6 +114,127 @@ exports.getTransactionHistory = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
+/**
+ * Get transaction history for all users (admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getAdminTransactions = async (req, res) => {
+  try {
+    // დროებითი ლოგი მოთხოვნის შესახებ
+    console.log('User requesting admin transactions:', { 
+      id: req.user.id, 
+      role: req.user.role || 'unknown',
+      firstName: req.user.first_name || 'Unknown',
+      lastName: req.user.last_name || 'Unknown'
+    });
+    
+    // პირდაპირ მოვიძიოთ ყველა ტრანზაქცია
+    // დავამატოთ ცხრილის არსებობის შემოწმება
+    const checkTableQuery = `
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'balance_transactions'
+      );
+    `;
+    
+    const tableExists = await pool.query(checkTableQuery);
+    console.log('balance_transactions table exists:', tableExists.rows[0].exists);
+    
+    // ცხრილის სტრუქტურის შემოწმება
+    const tableStructureQuery = `
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'balance_transactions';
+    `;
+    
+    const tableStructure = await pool.query(tableStructureQuery);
+    console.log('balance_transactions structure:', tableStructure.rows);
+    
+    // ტრანზაქციების რაოდენობა
+    const countQuery = `SELECT COUNT(*) FROM balance_transactions;`;
+    const countResult = await pool.query(countQuery);
+    console.log('Total balance_transactions count:', countResult.rows[0].count);
+    
+    // თუ ტრანზაქციები არსებობს, მოვითხოვოთ ერთი ნიმუში
+    const sampleQuery = `SELECT * FROM balance_transactions LIMIT 1;`;
+    const sampleResult = await pool.query(sampleQuery);
+    console.log('Sample transaction:', sampleResult.rows[0]);
+    
+    // მთავარი მოთხოვნა
+    const transactionsQuery = `
+      SELECT id, amount, transaction_type as type, description, status, 
+            created_at, reference_id, user_id 
+      FROM balance_transactions
+      ORDER BY created_at DESC
+    `;
+    
+    const transactionsResult = await pool.query(transactionsQuery);
+    console.log(`Found ${transactionsResult.rows.length} transactions in main query`);
+    
+    // მოვიძიოთ მომხმარებლები მაგრამ გავითვალისწინოთ სწორი სვეტები
+    const usersQuery = `SELECT id, email, first_name, last_name, role FROM users`;
+    const usersResult = await pool.query(usersQuery);
+    console.log(`Found ${usersResult.rows.length} users`); // მომხმარებლების რაოდენობის ლოგი
+    
+    // შევქმნათ მომხმარებლების მაპი
+    const usersMap = {};
+    usersResult.rows.forEach(user => {
+      usersMap[user.id] = {
+        id: user.id,
+        name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown User',
+        email: user.email,
+        is_admin: user.role === 'admin' // დავუშვათ რომ role===admin არის ადმინისტრატორი
+      };
+    });
+    
+    // გადავაფორმატოთ მონაცემები კლიენტის API-სთვის
+    const formattedTransactions = transactionsResult.rows.map(row => {
+      const user = usersMap[row.user_id] || {
+        id: row.user_id,
+        name: `მომხმარებელი #${row.user_id}`,
+        email: `user${row.user_id}@example.com`,
+        is_admin: false
+      };
+      
+      return {
+        id: row.id,
+        amount: row.amount,
+        type: row.type,
+        description: row.description,
+        status: row.status,
+        created_at: row.created_at,
+        reference_id: row.reference_id,
+        user: user
+      };
+    });
+    
+    // სერიალიზაციის პრობლემის დიაგნოსტიკა
+    console.log('Formatted transactions count:', formattedTransactions.length);
+    if (formattedTransactions.length > 0) {
+      console.log('First formatted transaction (sample):', 
+        JSON.stringify(formattedTransactions[0], null, 2)
+      );
+    }
+    
+    // შედეგის დაბრუნება
+    const response = { transactions: formattedTransactions };
+    console.log('Final response structure:', Object.keys(response));
+    console.log('transactions array is array?', Array.isArray(response.transactions));
+    console.log('transactions array length:', response.transactions.length);
+    
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error('Error fetching admin transactions:', error);
+    return res.status(500).json({ message: 'Server error while fetching admin transactions' });
+  }
+};
+
+/**
+ * Purchase VIP status using balance
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 exports.purchaseVipStatus = async (req, res) => {
   const { carId } = req.params;
   const { vipStatus, days } = req.body;

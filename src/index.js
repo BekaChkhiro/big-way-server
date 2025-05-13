@@ -44,14 +44,7 @@ const whitelist = [
 ].filter(Boolean);
 
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? function (origin, callback) {
-        if (!origin || whitelist.includes(origin)) {
-          return callback(null, true);
-        }
-        callback(new Error('Not allowed by CORS'));
-      }
-    : true, // Allow all origins in development
+  origin: true, // დროებითი ცვლილება: დაუშვას ყველა წყარო
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
