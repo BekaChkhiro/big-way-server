@@ -23,6 +23,11 @@ class CarSearch {
       params.push(filters.brand_id);
       paramCounter++;
     }
+    if (filters.model) {
+      filterConditions.push(`c.model ILIKE $${paramCounter}`);
+      params.push(`%${filters.model}%`);
+      paramCounter++;
+    }
     if (filters.category_id) {
       filterConditions.push(`c.category_id = $${paramCounter}`);
       params.push(filters.category_id);

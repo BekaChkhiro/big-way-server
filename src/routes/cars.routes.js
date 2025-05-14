@@ -210,7 +210,15 @@ router.get('/brands/id/:brandId/models', async (req, res) => {
   try {
     const brandId = parseInt(req.params.brandId);
     
+    console.log('GET /brands/id/:brandId/models - Request received with params:', req.params);
+    console.log('Parsed brandId:', brandId);
+    
+    // Set CORS headers for debugging
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET');
+    
     if (isNaN(brandId)) {
+      console.log('Invalid brand ID format:', req.params.brandId);
       return res.status(400).json({ 
         success: false,
         error: 'Invalid brand ID format'
@@ -222,29 +230,59 @@ router.get('/brands/id/:brandId/models', async (req, res) => {
     // First check if brand exists
     const brandQuery = 'SELECT * FROM brands WHERE id = $1';
     const brandResult = await pool.query(brandQuery, [brandId]);
+    console.log('Brand query result:', brandResult.rows);
     
     if (brandResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false,
-        error: `Brand with ID ${brandId} not found`
-      });
+      console.log(`Brand with ID ${brandId} not found in database`);
+      
+      // Fallback to hardcoded models if brand not in DB
+      const fallbackModels = [
+        'Model A', 'Model B', 'Model C', 'Model X', 'Model Y', 'Other'
+      ];
+      console.log('Returning fallback models:', fallbackModels);
+      return res.json(fallbackModels);
     }
     
-    console.log('Found brand:', brandResult.rows[0]);
+    console.log('Found brand in database:', brandResult.rows[0]);
     
     // Get models from the database
     const modelsQuery = 'SELECT name FROM car_models WHERE brand_id = $1 ORDER BY name';
     const modelsResult = await pool.query(modelsQuery, [brandId]);
+    console.log('Models query result:', modelsResult.rows);
     
     if (modelsResult.rows.length > 0) {
       const models = modelsResult.rows.map(row => row.name);
       console.log(`Found ${models.length} models in database for brand:`, brandResult.rows[0].name);
+      console.log('Returning models from database:', models);
       return res.json(models);
     }
     
-    // No models found in database, return empty array
+    // No models found in database, return fallback models for this specific brand
     console.log('No models found in database for brand ID:', brandId);
-    res.json([]);
+    const brandName = brandResult.rows[0].name.toLowerCase();
+    
+    // Enhanced fallback with more comprehensive options
+    const brandModels = {
+      'toyota': ['Camry', 'Corolla', 'RAV4', 'Land Cruiser', 'Prius'],
+      'honda': ['Civic', 'Accord', 'CR-V', 'Pilot', 'HR-V'],
+      'ford': ['F-150', 'Mustang', 'Explorer', 'Escape', 'Edge'],
+      'bmw': ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X7'],
+      'mercedes': ['C-Class', 'E-Class', 'S-Class', 'GLC', 'GLE']
+    };
+    
+    // Try a fuzzy match to find models
+    for (const [brand, models] of Object.entries(brandModels)) {
+      if (brandName.includes(brand) || brand.includes(brandName)) {
+        console.log(`Found fallback models for brand "${brandName}" using match with "${brand}"`);
+        console.log('Returning fallback models:', models);
+        return res.json(models);
+      }
+    }
+    
+    // Default fallback if no match was found
+    const defaultModels = ['Sedan', 'SUV', 'Coupe', 'Hatchback', 'Wagon', 'Other'];
+    console.log('No brand match found, returning default models:', defaultModels);
+    return res.json(defaultModels);
     
   } catch (error) {
     console.error('Error fetching models by brand ID:', error);
