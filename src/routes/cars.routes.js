@@ -426,9 +426,175 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 // Get all cars (used by admin section)
 router.get('/', async (req, res) => {
   try {
-    console.log('Fetching all cars');
+    // Extract filter parameters from request query
+    const {
+      brand_id,
+      model,
+      category,
+      yearFrom,
+      yearTo,
+      priceFrom,
+      priceTo,
+      engineSizeFrom,
+      engineSizeTo,
+      cylinders,
+      mileageFrom,
+      mileageTo,
+      transmission,
+      fuelType,
+      driveType,
+      steeringWheel,
+      color,
+      interiorMaterial,
+      interiorColor,
+      airbags,
+      location,
+      sortBy = 'created_at',
+      order = 'DESC',
+      page = 1,
+      limit = 12
+    } = req.query;
+
+    // Log the filter parameters
+    console.log('Fetching cars with filters:', JSON.stringify(req.query));
     
-    // Query to get all cars with their related data
+    // Build the query with filters
+    let queryParams = [];
+    let conditions = [];
+    let paramIndex = 1;
+    
+    // Helper function to add filter condition
+    const addFilter = (column, value, operator = '=') => {
+      if (value !== undefined && value !== '') {
+        conditions.push(`${column} ${operator} $${paramIndex}`);
+        queryParams.push(value);
+        paramIndex++;
+      }
+    };
+    
+    // Add all filter conditions
+    if (brand_id) {
+      addFilter('c.brand_id', brand_id);
+    }
+    
+    if (model) {
+      addFilter('LOWER(c.model)', model.toLowerCase(), 'LIKE');
+    }
+    
+    if (category) {
+      addFilter('c.category_id', category);
+    }
+    
+    if (yearFrom) {
+      addFilter('c.year', yearFrom, '>=');
+    }
+    
+    if (yearTo) {
+      addFilter('c.year', yearTo, '<=');
+    }
+    
+    if (priceFrom) {
+      addFilter('c.price', priceFrom, '>=');
+    }
+    
+    if (priceTo) {
+      addFilter('c.price', priceTo, '<=');
+    }
+    
+    if (engineSizeFrom) {
+      addFilter('spec.engine_size', engineSizeFrom, '>=');
+    }
+    
+    if (engineSizeTo) {
+      addFilter('spec.engine_size', engineSizeTo, '<=');
+    }
+    
+    if (cylinders) {
+      addFilter('spec.cylinders', cylinders);
+    }
+    
+    if (mileageFrom) {
+      addFilter('spec.mileage', mileageFrom, '>=');
+    }
+    
+    if (mileageTo) {
+      addFilter('spec.mileage', mileageTo, '<=');
+    }
+    
+    if (transmission) {
+      addFilter('LOWER(spec.transmission)', transmission.toLowerCase(), 'LIKE');
+    }
+    
+    if (fuelType) {
+      addFilter('LOWER(spec.fuel_type)', fuelType.toLowerCase(), 'LIKE');
+    }
+    
+    if (driveType) {
+      addFilter('LOWER(spec.drive_type)', driveType.toLowerCase(), 'LIKE');
+    }
+    
+    if (steeringWheel) {
+      addFilter('LOWER(spec.steering_wheel)', steeringWheel.toLowerCase(), 'LIKE');
+    }
+    
+    if (color) {
+      addFilter('LOWER(spec.color)', color.toLowerCase(), 'LIKE');
+    }
+    
+    if (interiorMaterial) {
+      addFilter('LOWER(spec.interior_material)', interiorMaterial.toLowerCase(), 'LIKE');
+    }
+    
+    if (interiorColor) {
+      addFilter('LOWER(spec.interior_color)', interiorColor.toLowerCase(), 'LIKE');
+    }
+    
+    if (airbags) {
+      addFilter('spec.airbags_count', airbags);
+    }
+    
+    if (location) {
+      addFilter('LOWER(loc.city)', location.toLowerCase(), 'LIKE');
+    }
+    
+    // Build the WHERE clause
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    
+    // Validate sortBy to prevent SQL injection
+    const validSortColumns = [
+      'c.created_at', 'c.price', 'c.year', 'spec.mileage'
+    ];
+    
+    // Map frontend sort keys to database columns
+    const sortMap = {
+      'created_at': 'c.created_at',
+      'price': 'c.price',
+      'year': 'c.year',
+      'mileage': 'spec.mileage'
+    };
+    
+    // Set default sort if not valid
+    const sortColumn = sortMap[sortBy] || 'c.created_at';
+    
+    // Ensure order is either ASC or DESC
+    const sortOrder = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    
+    // Calculate pagination
+    const offset = (page - 1) * limit;
+    
+    // Create count query to get total number of results
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM cars c
+      LEFT JOIN brands b ON c.brand_id = b.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      LEFT JOIN users u ON c.seller_id = u.id
+      LEFT JOIN locations loc ON c.location_id = loc.id
+      LEFT JOIN specifications spec ON c.specification_id = spec.id
+      ${whereClause}
+    `;
+    
+    // Create main query with sorting and pagination
     const query = `
       SELECT c.*, 
         b.name as brand_name, 
@@ -436,18 +602,25 @@ router.get('/', async (req, res) => {
         u.id as seller_id,
         loc.city, loc.country,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
-        spec.engine_size, spec.steering_wheel, 
-        spec.drive_type, spec.interior_material, spec.interior_color
+        spec.engine_size, spec.steering_wheel, spec.cylinders, spec.airbags_count,
+        spec.drive_type, spec.interior_material, spec.interior_color, spec.color
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
       LEFT JOIN users u ON c.seller_id = u.id
       LEFT JOIN locations loc ON c.location_id = loc.id
       LEFT JOIN specifications spec ON c.specification_id = spec.id
-      ORDER BY c.created_at DESC
+      ${whereClause}
+      ORDER BY ${sortColumn} ${sortOrder}
+      LIMIT ${limit} OFFSET ${offset}
     `;
     
-    const result = await pool.query(query);
+    // Execute count query to get total results
+    const countResult = await pool.query(countQuery, queryParams);
+    const totalCars = parseInt(countResult.rows[0].total);
+    
+    // Execute main query to get paginated results
+    const result = await pool.query(query, queryParams);
     
     // Get images for each car
     const cars = await Promise.all(result.rows.map(async (car) => {
@@ -499,8 +672,18 @@ router.get('/', async (req, res) => {
       };
     }));
     
-    console.log(`Found ${cars.length} cars in total`);
-    res.json(cars);
+    console.log(`Found ${cars.length} cars, with total of ${totalCars} matching filter criteria.`);
+    
+    // Return both cars and pagination metadata
+    res.json({
+      data: cars,
+      meta: {
+        total: totalCars,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(totalCars / limit)
+      }
+    });
   } catch (error) {
     console.error('Error fetching all cars:', error);
     res.status(500).json({
