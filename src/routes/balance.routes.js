@@ -6,16 +6,21 @@ const authMiddleware = require('../middlewares/auth.middleware');
 // Get user balance
 router.get('/', authMiddleware, balanceController.getBalance);
 
-// Add funds to balance
+// Add funds to balance (direct)
 router.post('/add', authMiddleware, balanceController.addFunds);
 
+// Online payment routes for balance
+router.post('/add-online', authMiddleware, balanceController.initializeOnlinePayment);
+router.post('/payment-callback', balanceController.handlePaymentCallback);
+router.get('/payment-complete', balanceController.paymentComplete);
+
+// Purchase VIP status with balance
+router.post('/purchase-vip', authMiddleware, balanceController.purchaseVipStatus);
+წ
 // Get transaction history
 router.get('/transactions', authMiddleware, balanceController.getTransactionHistory);
 
 // Get all transactions (admin only)
 router.get('/admin/transactions', authMiddleware, balanceController.getAdminTransactions);
-
-// Purchase VIP status with balance
-router.post('/purchase-vip/:carId', authMiddleware, balanceController.purchaseVipStatus);
 
 module.exports = router;

@@ -1,4 +1,17 @@
 const pool = require('../../config/db.config');
+const { createPaymentSession, verifyPayment } = require('../utils/flittPayment');
+const crypto = require('crypto');
+
+// Constants for VIP pricing
+const VIP_STATUS_PRICES = {
+  bronze: 50,
+  silver: 100,
+  gold: 200,
+  platinum: 500
+};
+
+// Get base URL from environment variable or use a default for development
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 /**
  * Get user balance
@@ -79,6 +92,163 @@ exports.addFunds = async (req, res) => {
     await pool.query('ROLLBACK');
     console.error('Error adding funds:', error);
     return res.status(500).json({ message: 'Server error while adding funds' });
+  }
+};
+
+/**
+ * Initialize online payment with Flitt
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.initializeOnlinePayment = async (req, res) => {
+  const { amount } = req.body;
+  const userId = req.user.id;
+  
+  if (!amount || isNaN(amount) || amount <= 0) {
+    return res.status(400).json({ message: 'Invalid amount' });
+  }
+  
+  try {
+    // Generate a unique order ID
+    const orderId = `BW-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    
+    // Create a pending transaction record
+    const transactionQuery = `
+      INSERT INTO balance_transactions (user_id, amount, transaction_type, description, status, external_reference)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id
+    `;
+    
+    const transactionResult = await pool.query(transactionQuery, [
+      userId,
+      amount,
+      'deposit',
+      'Online payment - balance top-up',
+      'pending',
+      orderId
+    ]);
+    
+    const transactionId = transactionResult.rows[0].id;
+    
+    // Initialize payment with Flitt
+    const paymentData = {
+      orderId,
+      description: `Big Way Balance Top-up (${amount} GEL)`,
+      amount, // Amount in GEL
+      redirectUrl: `${BASE_URL}/api/balance/payment-complete?orderId=${orderId}&userId=${userId}`
+    };
+    
+    // Create payment session with Flitt
+    const paymentSession = await createPaymentSession(paymentData);
+    
+    // Update the transaction with payment session information
+    await pool.query(
+      `UPDATE balance_transactions SET payment_data = $1 WHERE id = $2`,
+      [JSON.stringify(paymentSession), transactionId]
+    );
+    
+    // Return payment URL to client
+    return res.status(200).json({
+      success: true,
+      orderId,
+      paymentUrl: paymentSession.redirect_url || paymentSession.checkout_url,
+      message: 'Payment session created successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error initializing online payment:', error);
+    return res.status(500).json({ 
+      message: 'Server error while initializing payment',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Handle payment callback from Flitt
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.handlePaymentCallback = async (req, res) => {
+  try {
+    const { transaction_id, order_id, status } = req.body;
+    
+    console.log('Payment callback received:', req.body);
+    
+    if (!transaction_id || !order_id) {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+    
+    // Verify payment status with Flitt
+    const paymentVerification = await verifyPayment(transaction_id);
+    
+    // Find the corresponding transaction in our database
+    const transactionQuery = `
+      SELECT * FROM balance_transactions WHERE external_reference = $1
+    `;
+    const transactionResult = await pool.query(transactionQuery, [order_id]);
+    
+    if (transactionResult.rows.length === 0) {
+      console.error('Transaction not found for order_id:', order_id);
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+    
+    const transaction = transactionResult.rows[0];
+    
+    // Process based on payment status
+    if (paymentVerification.status === 'success' || status === 'success') {
+      // Start transaction
+      await pool.query('BEGIN');
+      
+      // Update transaction status to completed
+      await pool.query(
+        `UPDATE balance_transactions SET status = 'completed', payment_data = $1 WHERE id = $2`,
+        [JSON.stringify({...req.body, verification: paymentVerification}), transaction.id]
+      );
+      
+      // Update user balance
+      await pool.query(
+        `UPDATE users SET balance = balance + $1 WHERE id = $2`,
+        [transaction.amount, transaction.user_id]
+      );
+      
+      // Commit transaction
+      await pool.query('COMMIT');
+      
+      console.log(`Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
+    } else {
+      // Update transaction status to failed
+      await pool.query(
+        `UPDATE balance_transactions SET status = 'failed', payment_data = $1 WHERE id = $2`,
+        [JSON.stringify({...req.body, verification: paymentVerification}), transaction.id]
+      );
+      
+      console.log(`Payment failed for transaction ${transaction.id}`);
+    }
+    
+    // Always respond with success to Flitt to acknowledge receipt
+    return res.status(200).json({ success: true });
+    
+  } catch (error) {
+    console.error('Error processing payment callback:', error);
+    return res.status(500).json({ message: 'Server error processing payment callback' });
+  }
+};
+
+/**
+ * Handle payment completion redirect
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.paymentComplete = async (req, res) => {
+  try {
+    const { orderId, userId, status } = req.query;
+    
+    // Redirect to the client-side payment completion page
+    res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance/payment-complete?orderId=${orderId}&status=${status || 'pending'}`);
+  } catch (error) {
+    console.error('Error handling payment completion:', error);
+    res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance?error=payment-processing-failed`);
   }
 };
 
@@ -236,8 +406,7 @@ exports.getAdminTransactions = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.purchaseVipStatus = async (req, res) => {
-  const { carId } = req.params;
-  const { vipStatus, days } = req.body;
+  const { carId, vipStatus, days } = req.body;
   const userId = req.user.id;
   
   console.log('purchaseVipStatus received request:', { carId, vipStatus, days, userId });
