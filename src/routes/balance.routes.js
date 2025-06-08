@@ -16,7 +16,7 @@ router.get('/payment-complete', balanceController.paymentComplete);
 
 // Purchase VIP status with balance
 router.post('/purchase-vip', authMiddleware, balanceController.purchaseVipStatus);
-წ
+
 // Get transaction history
 router.get('/transactions', authMiddleware, balanceController.getTransactionHistory);
 
