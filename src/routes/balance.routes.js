@@ -12,7 +12,7 @@ router.post('/add', authMiddleware, balanceController.addFunds);
 // Online payment routes for balance
 router.post('/add-online', authMiddleware, balanceController.initializeOnlinePayment);
 router.post('/payment-callback', balanceController.handlePaymentCallback);
-// Support both GET and POST for payment-complete to handle different integration scenarios
+// Support both GET and POST for payment-complete endpoint
 router.get('/payment-complete', balanceController.paymentComplete);
 router.post('/payment-complete', balanceController.paymentComplete);
 
