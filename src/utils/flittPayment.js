@@ -5,17 +5,38 @@
 require('dotenv').config();
 const CloudIpsp = require('cloudipsp-node-js-sdk');
 
+// Determine environment
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Configuration for Flitt API
 const FLITT_CONFIG = {
-  merchantId: process.env.FLITT_MERCHANT_ID || '1549901', // Use test merchant ID as fallback
-  secretKey: process.env.FLITT_SECRET_KEY || 'test'      // Use test key as fallback
+  // Use test merchant ID as fallback for development, use .env values for production
+  merchantId: process.env.FLITT_MERCHANT_ID || '1549901',
+  secretKey: process.env.FLITT_SECRET_KEY || 'test',
+  // Set protocol based on environment (if required by Flitt)
+  protocol: isProduction ? 'https' : 'https',
+  apiDomain: process.env.FLITT_API_DOMAIN || 'api.fondy.eu'
 };
 
-// Initialize the Flitt checkout instance
+// Log configuration at startup (omitting sensitive data)
+console.log('Initializing Flitt payment with config:', {
+  merchantId: FLITT_CONFIG.merchantId,
+  environment: isProduction ? 'production' : 'development',
+  apiDomain: FLITT_CONFIG.apiDomain
+});
+
+// Initialize the Flitt checkout instance with full configuration
 const checkout = new CloudIpsp({
   merchantId: FLITT_CONFIG.merchantId,
-  secretKey: FLITT_CONFIG.secretKey
+  secretKey: FLITT_CONFIG.secretKey,
+  protocol: FLITT_CONFIG.protocol,
+  apiDomain: FLITT_CONFIG.apiDomain
 });
+
+// Validate configuration
+if (!FLITT_CONFIG.merchantId || !FLITT_CONFIG.secretKey) {
+  console.error('WARNING: Flitt payment is not properly configured. Check environment variables.');
+}
 
 /**
  * Creates a payment checkout session with Flitt
