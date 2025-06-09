@@ -15,7 +15,8 @@ const FLITT_CONFIG = {
   secretKey: process.env.FLITT_SECRET_KEY || 'test',
   // Set protocol based on environment (if required by Flitt)
   protocol: isProduction ? 'https' : 'https',
-  apiDomain: process.env.FLITT_API_DOMAIN || 'api.fondy.eu'
+  // Georgian merchants likely use a different API domain
+  apiDomain: process.env.FLITT_API_DOMAIN || 'https://pay.flitt.com'
 };
 
 // Log configuration at startup (omitting sensitive data)
