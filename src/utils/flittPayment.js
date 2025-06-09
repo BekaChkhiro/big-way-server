@@ -1,9 +1,11 @@
 /**
  * Flitt Payment Integration Utility
  * Provides methods to interact with Flitt payment gateway
+ * This implementation uses direct API calls to accommodate Georgian Flitt requirements
  */
 require('dotenv').config();
-const CloudIpsp = require('cloudipsp-node-js-sdk');
+const axios = require('axios');
+const crypto = require('crypto');
 
 // Determine environment
 const isProduction = process.env.NODE_ENV === 'production';
@@ -13,30 +15,51 @@ const FLITT_CONFIG = {
   // Use test merchant ID as fallback for development, use .env values for production
   merchantId: process.env.FLITT_MERCHANT_ID || '1549901',
   secretKey: process.env.FLITT_SECRET_KEY || 'test',
-  // Set protocol based on environment (if required by Flitt)
-  protocol: isProduction ? 'https' : 'https',
-  // Georgian merchants likely use a different API domain
-  apiDomain: process.env.FLITT_API_DOMAIN || 'https://pay.flitt.com'
+  // Flitt API endpoints
+  apiUrl: process.env.FLITT_API_URL || 'https://pay.flitt.com/api'
 };
 
 // Log configuration at startup (omitting sensitive data)
 console.log('Initializing Flitt payment with config:', {
   merchantId: FLITT_CONFIG.merchantId,
   environment: isProduction ? 'production' : 'development',
-  apiDomain: FLITT_CONFIG.apiDomain
-});
-
-// Initialize the Flitt checkout instance with full configuration
-const checkout = new CloudIpsp({
-  merchantId: FLITT_CONFIG.merchantId,
-  secretKey: FLITT_CONFIG.secretKey,
-  protocol: FLITT_CONFIG.protocol,
-  apiDomain: FLITT_CONFIG.apiDomain
+  apiUrl: FLITT_CONFIG.apiUrl
 });
 
 // Validate configuration
 if (!FLITT_CONFIG.merchantId || !FLITT_CONFIG.secretKey) {
   console.error('WARNING: Flitt payment is not properly configured. Check environment variables.');
+}
+
+/**
+ * Generate signature for Flitt API authentication
+ * @param {Object} data - The request data to sign
+ * @returns {string} - The calculated signature
+ */
+function generateSignature(data) {
+  // Sort the data keys alphabetically
+  const orderedData = {};
+  Object.keys(data)
+    .sort()
+    .forEach((key) => {
+      if (data[key] !== '' && data[key] !== null && data[key] !== undefined) {
+        orderedData[key] = data[key];
+      }
+    });
+
+  // Create a string of key=value pairs
+  const signString = Object.entries(orderedData)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('|');
+
+  // Add the secret key and calculate the hash
+  const signatureBase = `${signString}|${FLITT_CONFIG.secretKey}`;
+  const signature = crypto
+    .createHash('sha1')
+    .update(signatureBase)
+    .digest('hex');
+
+  return signature;
 }
 
 /**
@@ -57,47 +80,47 @@ async function createPaymentSession(paymentData) {
       throw new Error('Invalid payment data provided');
     }
     
-    // Format request data according to Flitt SDK requirements
+    // Format request data according to Flitt requirements
     const requestData = {
+      merchant_id: FLITT_CONFIG.merchantId,
       order_id: orderId,
       order_desc: description,
       currency: 'GEL',
-      amount: String(amount * 100), // Convert to lowest currency unit (tetri)
-      response_url: redirectUrl
+      amount: Math.round(amount * 100).toString(), // Convert to lowest currency unit (tetri)
+      response_url: redirectUrl,
+      server_callback_url: redirectUrl // Optional: specify if different from response_url
     };
+    
+    // Generate signature
+    const signature = generateSignature(requestData);
+    requestData.signature = signature;
     
     console.log('Creating Flitt payment session with merchant ID:', FLITT_CONFIG.merchantId);
-    console.log('Creating Flitt payment session:', requestData);
+    console.log('Creating Flitt payment session data:', requestData);
     
-    // Log configuration
-    console.log('Flitt configuration:', {
-      merchantId: FLITT_CONFIG.merchantId,
-      secretKey: FLITT_CONFIG.secretKey ? '******' : 'not set',
-      testMode: FLITT_CONFIG.merchantId === '1549901' // Check if using test credentials
-    });
+    // Make direct API request
+    const response = await axios.post(`${FLITT_CONFIG.apiUrl}/payments/init`, requestData);
     
-    // Use Flitt SDK to create checkout
-    let response;
-    try {
-      response = await checkout.Checkout(requestData);
-      console.log('Flitt payment session created:', response);
-    } catch (sdkError) {
-      console.error('Flitt SDK error details:', {
-        message: sdkError.message,
-        stack: sdkError.stack,
-        response: sdkError.response ? JSON.stringify(sdkError.response.data) : 'No response data'
-      });
-      throw sdkError;
+    console.log('Flitt API response:', response.data);
+    
+    // Check if the response is successful
+    if (response.data && response.data.success) {
+      return {
+        redirect_url: response.data.checkout_url || response.data.payment_url,
+        checkout_url: response.data.checkout_url || response.data.payment_url,
+        payment_id: response.data.payment_id
+      };
+    } else {
+      const errorMessage = response.data.error_message || 'Unknown error from payment gateway';
+      throw new Error(`Payment initialization failed: ${errorMessage}`);
     }
-    
-    return {
-      redirect_url: response.checkout_url,
-      checkout_url: response.checkout_url
-    };
   } catch (error) {
-    console.error('Error creating Flitt payment session:', error);
-    console.error('Error creating Flitt payment stack:', error.stack);
-    throw new Error(`Failed to create payment: ${error.message || JSON.stringify(error)}`);
+    console.error('Error creating Flitt payment session:', error.message);
+    if (error.response) {
+      console.error('API error response:', error.response.data);
+    }
+    console.error('Error stack:', error.stack);
+    throw new Error(`Failed to create payment: ${error.message}`);
   }
 }
 
@@ -113,26 +136,41 @@ async function verifyPayment(transactionId) {
     }
     
     const requestData = {
+      merchant_id: FLITT_CONFIG.merchantId,
       transaction_id: transactionId
     };
     
+    // Generate signature
+    const signature = generateSignature(requestData);
+    requestData.signature = signature;
+    
     console.log('Verifying Flitt payment:', requestData);
     
-    // Use Flitt SDK to verify the payment
-    const response = await checkout.Status(requestData);
+    // Make direct API request
+    const response = await axios.post(`${FLITT_CONFIG.apiUrl}/payments/status`, requestData);
     
-    console.log('Flitt payment verification result:', response);
-    return {
-      status: response.order_status || response.status,
-      transaction_id: transactionId,
-      order_id: response.order_id,
-      payment_id: response.payment_id,
-      amount: response.amount,
-      currency: response.currency
-    };
+    console.log('Flitt payment verification result:', response.data);
+    
+    // Check if the response is successful
+    if (response.data) {
+      return {
+        status: response.data.order_status || response.data.status,
+        transaction_id: transactionId,
+        order_id: response.data.order_id,
+        payment_id: response.data.payment_id,
+        amount: response.data.amount,
+        currency: response.data.currency
+      };
+    } else {
+      throw new Error('Invalid response from payment gateway');
+    }
   } catch (error) {
-    console.error('Error verifying Flitt payment:', error);
-    throw new Error(`Failed to verify payment: ${error.message || JSON.stringify(error)}`);
+    console.error('Error verifying Flitt payment:', error.message);
+    if (error.response) {
+      console.error('API error response:', error.response.data);
+    }
+    console.error('Error stack:', error.stack);
+    throw new Error(`Failed to verify payment: ${error.message}`);
   }
 }
 
