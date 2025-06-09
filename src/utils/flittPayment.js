@@ -44,18 +44,37 @@ async function createPaymentSession(paymentData) {
       response_url: redirectUrl
     };
     
+    console.log('Creating Flitt payment session with merchant ID:', FLITT_CONFIG.merchantId);
     console.log('Creating Flitt payment session:', requestData);
     
-    // Use Flitt SDK to create checkout
-    const response = await checkout.Checkout(requestData);
+    // Log configuration
+    console.log('Flitt configuration:', {
+      merchantId: FLITT_CONFIG.merchantId,
+      secretKey: FLITT_CONFIG.secretKey ? '******' : 'not set',
+      testMode: FLITT_CONFIG.merchantId === '1549901' // Check if using test credentials
+    });
     
-    console.log('Flitt payment session created:', response);
+    // Use Flitt SDK to create checkout
+    let response;
+    try {
+      response = await checkout.Checkout(requestData);
+      console.log('Flitt payment session created:', response);
+    } catch (sdkError) {
+      console.error('Flitt SDK error details:', {
+        message: sdkError.message,
+        stack: sdkError.stack,
+        response: sdkError.response ? JSON.stringify(sdkError.response.data) : 'No response data'
+      });
+      throw sdkError;
+    }
+    
     return {
       redirect_url: response.checkout_url,
       checkout_url: response.checkout_url
     };
   } catch (error) {
     console.error('Error creating Flitt payment session:', error);
+    console.error('Error creating Flitt payment stack:', error.stack);
     throw new Error(`Failed to create payment: ${error.message || JSON.stringify(error)}`);
   }
 }

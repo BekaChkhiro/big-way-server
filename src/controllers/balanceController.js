@@ -242,10 +242,13 @@ exports.handlePaymentCallback = async (req, res) => {
  */
 exports.paymentComplete = async (req, res) => {
   try {
-    const { orderId, userId, status } = req.query;
+    // Check both query params (GET) and body (POST)
+    const orderId = req.query.orderId || req.body.orderId;
+    const userId = req.query.userId || req.body.userId;
+    const status = req.query.status || req.body.status || 'pending';
     
     // Redirect to the client-side payment completion page
-    res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance/payment-complete?orderId=${orderId}&status=${status || 'pending'}`);
+    res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance/payment-complete?orderId=${orderId}&status=${status}`);
   } catch (error) {
     console.error('Error handling payment completion:', error);
     res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance?error=payment-processing-failed`);
