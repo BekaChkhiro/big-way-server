@@ -155,13 +155,13 @@ BEGIN
         END IF;
         
         -- Try to find a matching model list
-        SELECT models INTO brand_models 
+        Models INTO brand_models 
         FROM brand_model_mapping 
         WHERE LOWER(brand_name) = LOWER(brand_rec.name);
         
         -- If no direct match, try fuzzy match
         IF brand_models IS NULL THEN
-            SELECT models INTO brand_models 
+            Models INTO brand_models 
             FROM brand_model_mapping 
             WHERE 
                 LOWER(brand_rec.name) LIKE '%' || LOWER(brand_name) || '%' OR 

@@ -7,6 +7,7 @@ const swaggerUi = require('swagger-ui-express');
 const winston = require('winston');
 const authRoutes = require('./routes/auth.routes');
 const carsRoutes = require('./routes/cars.routes');
+const partsRoutes = require('./routes/parts.routes');
 const wishlistRoutes = require('./routes/wishlist.routes');
 const advertisementsRoutes = require('./routes/advertisements.routes');
 const vipRoutes = require('./routes/vip.routes');
@@ -78,6 +79,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/cars', carsRoutes); 
+app.use('/api/parts', partsRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/advertisements', advertisementsRoutes);
 app.use('/api/vip', vipRoutes);
