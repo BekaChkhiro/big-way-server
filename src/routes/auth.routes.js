@@ -271,16 +271,50 @@ router.get(
   '/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: '/login' }),
   (req, res) => {
-    // User authenticated, redirect to frontend with token
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const lang = 'ka'; // Default language prefix used in your app
+    console.log('Google OAuth callback received');
     
-    // Get tokens from authInfo that passport attached
-    const token = encodeURIComponent(req.authInfo.token);
-    const refreshToken = encodeURIComponent(req.authInfo.refreshToken);
-    const userData = encodeURIComponent(JSON.stringify(req.user));
-    
-    res.redirect(`${frontendUrl}/${lang}/auth/google/callback?token=${token}&refreshToken=${refreshToken}&user=${userData}`);
+    try {
+      // User authenticated, redirect to frontend with token
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      console.log('Frontend URL:', frontendUrl);
+      
+      const lang = 'ka'; // Default language prefix used in your app
+      
+      // Confirm authInfo exists
+      if (!req.authInfo || !req.authInfo.token || !req.authInfo.refreshToken) {
+        console.error('Missing authInfo in Google callback:', req.authInfo);
+        return res.status(500).send('Authentication failed - tokens missing');
+      }
+      
+      // Get tokens from authInfo that passport attached
+      const token = encodeURIComponent(req.authInfo.token);
+      const refreshToken = encodeURIComponent(req.authInfo.refreshToken);
+      const userData = encodeURIComponent(JSON.stringify(req.user));
+      
+      const redirectUrl = `${frontendUrl}/${lang}/auth/google/callback?token=${token}&refreshToken=${refreshToken}&user=${userData}`;
+      console.log('Redirecting to:', redirectUrl);
+      
+      // Try a different approach with HTML and meta refresh
+      // This sometimes works better across different hosting environments
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Redirecting...</title>
+          <meta http-equiv="refresh" content="0;url=${redirectUrl}">
+          <script>window.location.href = "${redirectUrl}";</script>
+        </head>
+        <body>
+          <p>Authentication successful! Redirecting to application...</p>
+          <p>If you are not redirected, <a href="${redirectUrl}">click here</a>.</p>
+        </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error('Error in Google callback:', error);
+      return res.status(500).send('Authentication failed - server error');
+    }
   }
 );
 

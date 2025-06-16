@@ -5,10 +5,17 @@ const UserModel = require('../src/models/user/base');
 const { generateToken, generateRefreshToken } = require('./jwt.config');
 
 // Setup passport with Google strategy
+// Log environment variables during initialization (without exposing secrets)
+console.log('Initializing Google OAuth strategy with:');
+console.log('- GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'Defined' : 'Missing');
+console.log('- GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Defined' : 'Missing');
+console.log('- GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback');
+console.log('- FRONTEND_URL:', process.env.FRONTEND_URL || 'Not defined');
+
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || "/auth/google/callback",
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || "/api/auth/google/callback", // Make sure it includes /api prefix
     passReqToCallback: true
   },
   async function(req, accessToken, refreshToken, profile, done) {
