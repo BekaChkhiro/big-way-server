@@ -82,17 +82,18 @@ passport.use(new GoogleStrategy({
           // Generate a random password hash for OAuth users (they'll never use it for login)
           const randomPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).toUpperCase().slice(-4);
           
-          // Default values for required fields that might not come from OAuth
-          const defaultAge = 18; // Default age
-          const defaultGender = 'male'; // Default gender - must be a valid enum value from database
-          const defaultPhone = '+0000000000'; // Default phone
+          // Default values for required fields that are mandatory but will be updated by user later
+          const defaultAge = 18; // Temporary default age
+          const defaultGender = 'male'; // Temporary default gender - must be a valid enum value
+          const defaultPhone = '+0000000000'; // Temporary default phone
+          const profileCompleted = false; // Mark profile as not completed
           
           // Insert the new user with all required fields
           const insertResult = await client.query(
             `INSERT INTO users 
-            (username, email, google_id, first_name, last_name, role, password, age, gender, phone)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at, google_id`,
+            (username, email, google_id, first_name, last_name, role, password, age, gender, phone, profile_completed)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at, google_id, profile_completed`,
             [
               username, 
               email,
@@ -103,7 +104,8 @@ passport.use(new GoogleStrategy({
               randomPassword, // random password for OAuth users
               defaultAge,
               defaultGender,
-              defaultPhone
+              defaultPhone,
+              profileCompleted // mark profile as not completed
             ]
           );
           
