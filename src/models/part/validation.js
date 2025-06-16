@@ -34,24 +34,41 @@ class PartValidation {
   }
 
   static validatePartData(partData) {
+    console.log('Validating part data:', JSON.stringify(partData, null, 2));
+    
+    if (!partData) {
+      console.error('PartData is undefined or null');
+      throw new Error('Part data is required');
+    }
+    
     // Check required fields
     const requiredFields = ['title', 'category_id', 'brand_id', 'model_id', 'condition', 'price'];
-    const missingFields = requiredFields.filter(field => !partData[field]);
+    const missingFields = requiredFields.filter(field => {
+      const missing = partData[field] === undefined || partData[field] === null || partData[field] === '';
+      if (missing) {
+        console.error(`Field ${field} is missing or empty: ${partData[field]}`);
+      }
+      return missing;
+    });
 
     if (missingFields.length > 0) {
       throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
     }
 
     // Validate price
+    console.log(`Price validation: ${partData.price}, type: ${typeof partData.price}`);
     if (isNaN(partData.price) || parseFloat(partData.price) <= 0) {
       throw new Error('Price must be a positive number');
     }
 
     // Title length validation
+    console.log(`Title validation: ${partData.title}, length: ${partData.title.length}`);
     if (partData.title.length < 3 || partData.title.length > 255) {
       throw new Error('Title must be between 3 and 255 characters');
     }
+    
+    console.log('Part data validation successful');
   }
 }
 
-module.exports = new PartValidation();
+module.exports = PartValidation;

@@ -11,6 +11,9 @@ class PartCreate {
 
       console.log('Creating part with data:', JSON.stringify(partData, null, 2));
 
+      // Validate all part data first
+      PartValidation.validatePartData(partData);
+
       // Validate brand and category
       await PartValidation.validateBrandAndCategory(client, partData.brand_id, partData.category_id, partData);
       

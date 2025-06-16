@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const passport = require('passport');
 const authMiddleware = require('../middlewares/auth.middleware');
 const User = require('../models/user');
+
+// Initialize passport
+require('../../config/passport.config');
 
 // Registration route
 router.post('/register', async (req, res) => {
@@ -256,5 +260,27 @@ router.put('/users/:id/role', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+// Google OAuth routes
+router.get('/google', passport.authenticate('google', {
+  scope: ['profile', 'email']
+}));
+
+// Google OAuth callback
+router.get('/google/callback', 
+  passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+  (req, res) => {
+    const { user, token, refreshToken } = req.user;
+    
+    // In a real application, you might redirect to the frontend with tokens
+    // For API usage, we'll return JSON
+    res.json({ 
+      user, 
+      token, 
+      refreshToken,
+      message: 'Google login successful' 
+    });
+  }
+);
 
 module.exports = router;

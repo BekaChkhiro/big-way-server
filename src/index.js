@@ -3,6 +3,8 @@ const dotenv = require('dotenv');
 dotenv.config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+const passport = require('passport');
 const swaggerUi = require('swagger-ui-express');
 const winston = require('winston');
 const authRoutes = require('./routes/auth.routes');
@@ -62,6 +64,13 @@ app.options('*', cors(corsOptions));
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Initialize Passport
+app.use(passport.initialize());
+
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+console.log('Serving static files from:', path.join(__dirname, '../uploads'));
 
 // Logging middleware
 app.use((req, res, next) => {

@@ -1,48 +1,24 @@
 const { PartModel, PartCreate, PartSearch, PartUpdate } = require('../../models/part');
+const pool = require('../../../config/db.config');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const { promisify } = require('util');
 const sharp = require('sharp');
+const { upload, processAndUpload } = require('../../middlewares/upload.middleware');
 
-// Configure multer for handling file uploads
-const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    try {
-      const uploadDir = path.join(__dirname, '../../../uploads/parts');
-      
-      // Check if directory exists, create it if it doesn't
-      try {
-        await fs.access(uploadDir);
-      } catch (error) {
-        await fs.mkdir(uploadDir, { recursive: true });
-      }
-      
-      cb(null, uploadDir);
-    } catch (error) {
-      cb(error, null);
-    }
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+// Helper function to check if a file exists
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch (error) {
+    return false;
   }
-});
+}
 
-const fileFilter = (req, file, cb) => {
-  // Accept images only
-  if (!file.originalname.match(/\.(jpg|JPG|jpeg|JPEG|png|PNG|gif|GIF|webp|WEBP)$/)) {
-    req.fileValidationError = 'Only image files are allowed!';
-    return cb(new Error('Only image files are allowed!'), false);
-  }
-  cb(null, true);
-};
-
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
-});
+// We're now using the upload middleware imported from upload.middleware.js
+// which uses multer.memoryStorage() and handles AWS S3 uploads
 
 class PartsController {
   // Create a new part
@@ -51,92 +27,66 @@ class PartsController {
       const uploadMiddleware = promisify(upload.array('images', 10));
       await uploadMiddleware(req, res);
 
-      const partData = JSON.parse(req.body.partData || '{}');
+      console.log('Request body:', req.body);
+      console.log('Raw partData from request:', req.body.partData);
+      
+      let partData;
+      try {
+        partData = typeof req.body.partData === 'string' 
+          ? JSON.parse(req.body.partData) 
+          : req.body.partData || {};
+      } catch (err) {
+        console.error('Error parsing partData:', err);
+        throw new Error(`Failed to parse part data: ${err.message}`);
+      }
+      
+      console.log('Parsed partData:', partData);
+      
+      // Ensure all numeric fields are actually numbers
+      if (partData.category_id) partData.category_id = Number(partData.category_id);
+      if (partData.brand_id) partData.brand_id = Number(partData.brand_id);
+      if (partData.model_id) partData.model_id = Number(partData.model_id);
+      if (partData.price) partData.price = Number(partData.price);
+      
       const images = req.files;
+      console.log(`Number of images received: ${images ? images.length : 0}`);
+      
       const sellerId = req.user.id;
+      console.log(`Seller ID: ${sellerId}`);
+      console.log(`Creating part with data:`, JSON.stringify(partData, null, 2));
       
-      // Create the upload directories for processed images
-      const baseDir = path.join(__dirname, '../../../uploads/parts');
-      const processedImages = [];
+      let processedImages = [];
       
-      // Only process images if there are any
+      // Upload images to AWS S3 if there are any
       if (images && images.length > 0) {
-        // Process the uploaded images (create thumbnails, etc.)
-        for (const image of images) {
-          const filename = path.basename(image.path);
-          const partUploadDir = path.join(baseDir, 'temp'); // Temporary directory
+        try {
+          console.log('Uploading images to AWS S3...');
+          // Use the upload middleware's processAndUpload function to handle AWS S3 uploads
+          const awsUploadResults = await processAndUpload(images);
+          console.log('AWS upload results:', awsUploadResults);
           
-          // Create directories if they don't exist
-          await fs.mkdir(partUploadDir, { recursive: true });
-          await fs.mkdir(path.join(partUploadDir, 'thumbnails'), { recursive: true });
-          await fs.mkdir(path.join(partUploadDir, 'medium'), { recursive: true });
-          await fs.mkdir(path.join(partUploadDir, 'large'), { recursive: true });
-          
-          // Process the images
-          const imageBuffer = await fs.readFile(image.path);
-          
-          // Create thumbnail
-          await sharp(imageBuffer)
-            .resize(150, 150, { fit: 'inside' })
-            .toFile(path.join(partUploadDir, 'thumbnails', filename));
-          
-          // Create medium size
-          await sharp(imageBuffer)
-            .resize(600, 600, { fit: 'inside' })
-            .toFile(path.join(partUploadDir, 'medium', filename));
-          
-          // Create large size
-          await sharp(imageBuffer)
-            .resize(1200, 1200, { fit: 'inside' })
-            .toFile(path.join(partUploadDir, 'large', filename));
-          
-          // Add to processed images
-          processedImages.push({
-            image_url: `/uploads/parts/temp/${filename}`,
-            thumbnail_url: `/uploads/parts/temp/thumbnails/${filename}`,
-            medium_url: `/uploads/parts/temp/medium/${filename}`,
-            large_url: `/uploads/parts/temp/large/${filename}`
+          // Format the image URLs for the database
+          processedImages = awsUploadResults.map((result, index) => {
+            // Each result has urls for different sizes
+            return {
+              image_url: result.urls.original,
+              thumbnail_url: result.urls.thumbnail,
+              medium_url: result.urls.medium,
+              large_url: result.urls.large,
+              is_primary: index === 0 // First image is primary
+            };
           });
+          
+          console.log('Processed image URLs:', processedImages);
+        } catch (uploadError) {
+          console.error('Error uploading images to AWS S3:', uploadError);
+          throw new Error(`Failed to upload images: ${uploadError.message}`);
         }
       }
       
-      const part = await PartCreate.create(partData, images, sellerId, processedImages);
-      
-      // Move images from temp directory to part's directory
-      if (part && part.id && images && images.length > 0) {
-        const partUploadDir = path.join(baseDir, part.id.toString());
-        
-        // Create directories if they don't exist
-        await fs.mkdir(partUploadDir, { recursive: true });
-        await fs.mkdir(path.join(partUploadDir, 'thumbnails'), { recursive: true });
-        await fs.mkdir(path.join(partUploadDir, 'medium'), { recursive: true });
-        await fs.mkdir(path.join(partUploadDir, 'large'), { recursive: true });
-        
-        // Move files from temp to part directory
-        for (const image of processedImages) {
-          const filename = path.basename(image.image_url);
-          
-          await fs.rename(
-            path.join(baseDir, 'temp', filename),
-            path.join(partUploadDir, filename)
-          );
-          
-          await fs.rename(
-            path.join(baseDir, 'temp', 'thumbnails', filename),
-            path.join(partUploadDir, 'thumbnails', filename)
-          );
-          
-          await fs.rename(
-            path.join(baseDir, 'temp', 'medium', filename),
-            path.join(partUploadDir, 'medium', filename)
-          );
-          
-          await fs.rename(
-            path.join(baseDir, 'temp', 'large', filename),
-            path.join(partUploadDir, 'large', filename)
-          );
-        }
-      }
+      // Create the part with AWS S3 image URLs
+      console.log('Creating part with processed images:', processedImages);
+      const part = await PartCreate.create(partData, [], sellerId, processedImages);
 
       res.status(201).json({
         success: true,
@@ -144,9 +94,13 @@ class PartsController {
       });
     } catch (error) {
       console.error('Error creating part:', error);
+      // Use req.body.partData instead of undefined partData
+      console.error('Error details:', req.body.partData ? JSON.stringify(JSON.parse(req.body.partData), null, 2) : 'No part data');
       res.status(400).json({
         success: false,
-        message: error.message
+        message: error.message,
+        details: error.stack,
+        partData: req.body.partData
       });
     }
   }
@@ -215,8 +169,26 @@ class PartsController {
       const uploadMiddleware = promisify(upload.array('images', 10));
       await uploadMiddleware(req, res);
 
-      const partData = JSON.parse(req.body.partData || '{}');
+      let partData;
+      try {
+        partData = typeof req.body.partData === 'string' 
+          ? JSON.parse(req.body.partData) 
+          : req.body.partData || {};
+      } catch (err) {
+        console.error('Error parsing partData:', err);
+        throw new Error(`Failed to parse part data: ${err.message}`);
+      }
+      
+      console.log('Parsed partData for update:', partData);
+      
+      // Ensure all numeric fields are actually numbers
+      if (partData.category_id) partData.category_id = Number(partData.category_id);
+      if (partData.brand_id) partData.brand_id = Number(partData.brand_id);
+      if (partData.model_id) partData.model_id = Number(partData.model_id);
+      if (partData.price) partData.price = Number(partData.price);
+      
       const images = req.files;
+      console.log(`Number of images received for update: ${images ? images.length : 0}`);
       
       // Check if user is authorized to update the part
       const part = await PartModel.findById(id);
@@ -236,52 +208,36 @@ class PartsController {
         });
       }
 
-      // Process images if any
-      const processedImages = [];
+      let processedImages = [];
       
+      // Upload new images to AWS S3 if any
       if (images && images.length > 0) {
-        const baseDir = path.join(__dirname, '../../../uploads/parts');
-        const partUploadDir = path.join(baseDir, id.toString());
-        
-        // Create directories if they don't exist
-        await fs.mkdir(partUploadDir, { recursive: true });
-        await fs.mkdir(path.join(partUploadDir, 'thumbnails'), { recursive: true });
-        await fs.mkdir(path.join(partUploadDir, 'medium'), { recursive: true });
-        await fs.mkdir(path.join(partUploadDir, 'large'), { recursive: true });
-        
-        // Process the uploaded images
-        for (const image of images) {
-          const filename = path.basename(image.path);
+        try {
+          console.log('Uploading new images to AWS S3 for part update...');
+          // Use the upload middleware's processAndUpload function to handle AWS S3 uploads
+          const awsUploadResults = await processAndUpload(images);
+          console.log('AWS upload results for update:', awsUploadResults);
           
-          // Process the images
-          const imageBuffer = await fs.readFile(image.path);
-          
-          // Create thumbnail
-          await sharp(imageBuffer)
-            .resize(150, 150, { fit: 'inside' })
-            .toFile(path.join(partUploadDir, 'thumbnails', filename));
-          
-          // Create medium size
-          await sharp(imageBuffer)
-            .resize(600, 600, { fit: 'inside' })
-            .toFile(path.join(partUploadDir, 'medium', filename));
-          
-          // Create large size
-          await sharp(imageBuffer)
-            .resize(1200, 1200, { fit: 'inside' })
-            .toFile(path.join(partUploadDir, 'large', filename));
-          
-          // Add to processed images
-          processedImages.push({
-            image_url: `/uploads/parts/${id}/${filename}`,
-            thumbnail_url: `/uploads/parts/${id}/thumbnails/${filename}`,
-            medium_url: `/uploads/parts/${id}/medium/${filename}`,
-            large_url: `/uploads/parts/${id}/large/${filename}`
+          // Format the image URLs for the database
+          processedImages = awsUploadResults.map((result, index) => {
+            // Each result has urls for different sizes
+            return {
+              image_url: result.urls.original,
+              thumbnail_url: result.urls.thumbnail,
+              medium_url: result.urls.medium,
+              large_url: result.urls.large,
+              is_primary: false // New images are not primary by default
+            };
           });
+          
+          console.log('Processed new image URLs for update:', processedImages);
+        } catch (uploadError) {
+          console.error('Error uploading images to AWS S3 during update:', uploadError);
+          throw new Error(`Failed to upload images: ${uploadError.message}`);
         }
       }
 
-      const updatedPart = await PartUpdate.update(id, partData, images, processedImages);
+      const updatedPart = await PartUpdate.update(id, partData, [], processedImages);
       
       res.status(200).json({
         success: true,
@@ -406,18 +362,76 @@ class PartsController {
       
       const deletedImage = await PartUpdate.deleteImage(partId, imageId);
       
-      // Delete the file from filesystem
-      try {
-        const baseDir = path.join(__dirname, '../../../uploads/parts', partId.toString());
-        const filename = path.basename(deletedImage.image_url);
-        
-        await fs.unlink(path.join(baseDir, filename));
-        await fs.unlink(path.join(baseDir, 'thumbnails', filename));
-        await fs.unlink(path.join(baseDir, 'medium', filename));
-        await fs.unlink(path.join(baseDir, 'large', filename));
-      } catch (err) {
-        console.error('Error deleting image files:', err);
-        // Continue even if file deletion fails
+      // If the image is stored on S3, delete it from there
+      if (deletedImage && deletedImage.image_url && deletedImage.image_url.includes('amazonaws.com')) {
+        try {
+          const { s3, bucket } = require('../../../config/storage.config');
+          
+          // Extract the S3 key from the URL
+          // URL format is usually: https://bucket-name.s3.region.amazonaws.com/path/to/file
+          const getS3KeyFromUrl = (url) => {
+            // Extract everything after the amazonaws.com/
+            const urlParts = url.split('amazonaws.com/');
+            if (urlParts.length > 1) {
+              return urlParts[1];
+            }
+            return null;
+          };
+          
+          // Delete original image
+          if (deletedImage.image_url) {
+            const originalKey = getS3KeyFromUrl(deletedImage.image_url);
+            if (originalKey) {
+              await s3.deleteObject({ Bucket: bucket, Key: originalKey }).promise();
+              console.log(`Deleted original image from S3: ${originalKey}`);
+            }
+          }
+          
+          // Delete thumbnail
+          if (deletedImage.thumbnail_url) {
+            const thumbnailKey = getS3KeyFromUrl(deletedImage.thumbnail_url);
+            if (thumbnailKey) {
+              await s3.deleteObject({ Bucket: bucket, Key: thumbnailKey }).promise();
+              console.log(`Deleted thumbnail image from S3: ${thumbnailKey}`);
+            }
+          }
+          
+          // Delete medium image
+          if (deletedImage.medium_url) {
+            const mediumKey = getS3KeyFromUrl(deletedImage.medium_url);
+            if (mediumKey) {
+              await s3.deleteObject({ Bucket: bucket, Key: mediumKey }).promise();
+              console.log(`Deleted medium image from S3: ${mediumKey}`);
+            }
+          }
+          
+          // Delete large image
+          if (deletedImage.large_url) {
+            const largeKey = getS3KeyFromUrl(deletedImage.large_url);
+            if (largeKey) {
+              await s3.deleteObject({ Bucket: bucket, Key: largeKey }).promise();
+              console.log(`Deleted large image from S3: ${largeKey}`);
+            }
+          }
+          
+        } catch (err) {
+          console.error('Error deleting image from S3:', err);
+          // Continue even if S3 deletion fails
+        }
+      } else {
+        // Fallback for local files (legacy support)
+        try {
+          const baseDir = path.join(__dirname, '../../../uploads/parts', partId.toString());
+          const filename = path.basename(deletedImage.image_url);
+          
+          await fs.unlink(path.join(baseDir, filename)).catch(err => console.log('File not found:', err.message));
+          await fs.unlink(path.join(baseDir, 'thumbnails', filename)).catch(err => console.log('Thumbnail not found:', err.message));
+          await fs.unlink(path.join(baseDir, 'medium', filename)).catch(err => console.log('Medium not found:', err.message));
+          await fs.unlink(path.join(baseDir, 'large', filename)).catch(err => console.log('Large not found:', err.message));
+        } catch (err) {
+          console.error('Error deleting local image files:', err);
+          // Continue even if local file deletion fails
+        }
       }
       
       res.status(200).json({
