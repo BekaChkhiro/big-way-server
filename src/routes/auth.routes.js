@@ -273,13 +273,14 @@ router.get(
   (req, res) => {
     // User authenticated, redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const lang = 'ka'; // Default language prefix used in your app
     
     // Get tokens from authInfo that passport attached
     const token = encodeURIComponent(req.authInfo.token);
     const refreshToken = encodeURIComponent(req.authInfo.refreshToken);
     const userData = encodeURIComponent(JSON.stringify(req.user));
     
-    res.redirect(`${frontendUrl}/auth/google/callback?token=${token}&refreshToken=${refreshToken}&user=${userData}`);
+    res.redirect(`${frontendUrl}/${lang}/auth/google/callback?token=${token}&refreshToken=${refreshToken}&user=${userData}`);
   }
 );
 
