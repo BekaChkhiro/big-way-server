@@ -269,9 +269,18 @@ router.get(
 
 router.get(
   '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+  (req, res, next) => {
+    console.log('Google OAuth callback request received, query params:', req.query);
+    next();
+  },
+  passport.authenticate('google', { 
+    session: false, 
+    failureRedirect: '/login',
+    failWithError: true // Enable error handling
+  }),
   (req, res) => {
-    console.log('Google OAuth callback received');
+    // Success handler
+    console.log('Google OAuth authentication successful');
     
     try {
       // User authenticated, redirect to frontend with token
@@ -280,10 +289,16 @@ router.get(
       
       const lang = 'ka'; // Default language prefix used in your app
       
+      // Debug info
+      console.log('Auth info:', req.authInfo);
+      console.log('User:', req.user);
+      
       // Confirm authInfo exists
       if (!req.authInfo || !req.authInfo.token || !req.authInfo.refreshToken) {
-        console.error('Missing authInfo in Google callback:', req.authInfo);
-        return res.status(500).send('Authentication failed - tokens missing');
+        console.error('Missing authInfo in Google callback. req.authInfo:', req.authInfo);
+        return res.status(500).send(
+          '<html><body><h1>Authentication Error</h1><p>Missing authentication tokens. Please try again later.</p></body></html>'
+        );
       }
       
       // Get tokens from authInfo that passport attached
@@ -306,15 +321,27 @@ router.get(
           <script>window.location.href = "${redirectUrl}";</script>
         </head>
         <body>
-          <p>Authentication successful! Redirecting to application...</p>
+          <h1>Authentication successful!</h1>
+          <p>Redirecting to application...</p>
           <p>If you are not redirected, <a href="${redirectUrl}">click here</a>.</p>
         </body>
         </html>
       `);
     } catch (error) {
       console.error('Error in Google callback:', error);
-      return res.status(500).send('Authentication failed - server error');
+      return res.status(500).send(
+        '<html><body><h1>Authentication Error</h1><p>An unexpected error occurred. Please try again later.</p><pre>' + 
+        (process.env.NODE_ENV === 'development' ? error.stack : '') + '</pre></body></html>'
+      );
     }
+  },
+  (err, req, res, next) => {
+    // Error handler
+    console.error('Google authentication error:', err);
+    return res.status(500).send(
+      '<html><body><h1>Google Authentication Failed</h1><p>' + 
+      (err.message || 'Unknown error occurred') + '</p></body></html>'
+    );
   }
 );
 
