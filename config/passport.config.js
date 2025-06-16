@@ -84,7 +84,7 @@ passport.use(new GoogleStrategy({
           
           // Default values for required fields that might not come from OAuth
           const defaultAge = 18; // Default age
-          const defaultGender = 'not specified'; // Default gender
+          const defaultGender = 'male'; // Default gender - must be a valid enum value from database
           const defaultPhone = '+0000000000'; // Default phone
           
           // Insert the new user with all required fields
