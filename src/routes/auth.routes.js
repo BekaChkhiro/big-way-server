@@ -262,24 +262,24 @@ router.put('/users/:id/role', authMiddleware, async (req, res) => {
 });
 
 // Google OAuth routes
-router.get('/google', passport.authenticate('google', {
-  scope: ['profile', 'email']
-}));
+router.get(
+  '/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
 
-// Google OAuth callback
-router.get('/google/callback', 
+router.get(
+  '/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: '/login' }),
   (req, res) => {
-    const { user, token, refreshToken } = req.user;
+    // User authenticated, redirect to frontend with token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     
-    // In a real application, you might redirect to the frontend with tokens
-    // For API usage, we'll return JSON
-    res.json({ 
-      user, 
-      token, 
-      refreshToken,
-      message: 'Google login successful' 
-    });
+    // Get tokens from authInfo that passport attached
+    const token = encodeURIComponent(req.authInfo.token);
+    const refreshToken = encodeURIComponent(req.authInfo.refreshToken);
+    const userData = encodeURIComponent(JSON.stringify(req.user));
+    
+    res.redirect(`${frontendUrl}/auth/google/callback?token=${token}&refreshToken=${refreshToken}&user=${userData}`);
   }
 );
 

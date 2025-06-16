@@ -103,12 +103,8 @@ passport.use(new GoogleStrategy({
         delete user.reset_token;
         delete user.reset_token_expires;
         
-        // Pass along tokens and user data
-        return done(null, {
-          user,
-          token,
-          refreshToken: jwtRefreshToken
-        });
+        // Attach tokens and user to req object
+        return done(null, user, { token, refreshToken: jwtRefreshToken });
       } catch (error) {
         await client.query('ROLLBACK');
         return done(error, null);
