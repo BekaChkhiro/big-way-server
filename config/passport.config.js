@@ -79,11 +79,14 @@ passport.use(new GoogleStrategy({
             username = username + Math.floor(Math.random() * 10000);
           }
           
-          // Insert the new user
+          // Generate a random password hash for OAuth users (they'll never use it for login)
+          const randomPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).toUpperCase().slice(-4);
+          
+          // Insert the new user with a password (required by DB schema)
           const insertResult = await client.query(
             `INSERT INTO users 
-            (username, email, google_id, first_name, last_name, role)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            (username, email, google_id, first_name, last_name, role, password)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at, google_id`,
             [
               username, 
@@ -91,7 +94,8 @@ passport.use(new GoogleStrategy({
               profile.id,
               firstName,
               lastName,
-              'user' // default role
+              'user', // default role
+              randomPassword // random password for OAuth users
             ]
           );
           
