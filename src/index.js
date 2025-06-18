@@ -16,6 +16,7 @@ const vipRoutes = require('./routes/vip.routes');
 const balanceRoutes = require('./routes/balance.routes');
 const adminVipRoutes = require('./routes/adminVip.routes');
 const userRoutes = require('./routes/user.routes');
+const vipPricingRoutes = require('./routes/vipPricingRoutes');
 const specs = require('./docs/swagger');
 const pool = require('../config/db.config');
 
@@ -96,6 +97,7 @@ app.use('/api/vip', vipRoutes);
 app.use('/api/balance', balanceRoutes);
 app.use('/api/admin', adminVipRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api', vipPricingRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Big Way API' });
@@ -109,7 +111,7 @@ app.use((err, req, res, next) => {
 
 // Only start the server if this file is run directly
 if (require.main === module) {
-  const PORT = process.env.PORT || 5000;
+  const PORT = process.env.PORT || 5001; // Changed from 5000 to 5001 to avoid conflict
   
   // Test database connection before starting server
   pool.query('SELECT NOW()')
