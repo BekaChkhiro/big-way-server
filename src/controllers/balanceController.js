@@ -1,5 +1,6 @@
 const pool = require('../../config/db.config');
 const { createPaymentSession, verifyPayment } = require('../utils/flittPayment');
+const bogPaymentService = require('../services/bogPaymentService');
 const crypto = require('crypto');
 
 // Constants for VIP pricing
@@ -96,17 +97,21 @@ exports.addFunds = async (req, res) => {
 };
 
 /**
- * Initialize online payment with Flitt
+ * Initialize online payment with selected payment provider
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
 exports.initializeOnlinePayment = async (req, res) => {
-  const { amount } = req.body;
+  const { amount, bank } = req.body;
   const userId = req.user.id;
   
   if (!amount || isNaN(amount) || amount <= 0) {
     return res.status(400).json({ message: 'Invalid amount' });
   }
+  
+  // Validate bank selection
+  const validBanks = ['flitt', 'bog', 'tbc']; // Add more banks as needed
+  const selectedBank = bank && validBanks.includes(bank.toLowerCase()) ? bank.toLowerCase() : 'flitt'; // Default to Flitt
   
   try {
     // Generate a unique order ID
@@ -123,35 +128,105 @@ exports.initializeOnlinePayment = async (req, res) => {
       userId,
       amount,
       'deposit',
-      'Online payment - balance top-up',
+      `Online payment (${selectedBank}) - balance top-up`,
       'pending',
       orderId
     ]);
     
     const transactionId = transactionResult.rows[0].id;
     
-    // Initialize payment with Flitt
-    const paymentData = {
-      orderId,
-      description: `Big Way Balance Top-up (${amount} GEL)`,
-      amount, // Amount in GEL
-      redirectUrl: `${BASE_URL}/api/balance/payment-complete?orderId=${orderId}&userId=${userId}`
-    };
+    let paymentSession;
+    let paymentUrl;
     
-    // Create payment session with Flitt
-    const paymentSession = await createPaymentSession(paymentData);
+    // Initialize payment based on selected bank
+    switch (selectedBank) {
+      case 'bog':
+        try {
+          // Update transaction record with payment provider
+          await pool.query(
+            'UPDATE balance_transactions SET payment_provider = $1 WHERE id = $2',
+            ['bog', transactionId]
+          );
+          
+          // Create order data for BOG API
+          const baseUrl = `${req.protocol}://${req.get('host')}`;
+          const orderData = {
+            amount: amount,
+            description: `Balance top-up for user #${userId}`,
+            shopOrderId: orderId,
+            redirectUrl: `${baseUrl}/api/balance/payment-complete?orderId=${orderId}&status=success`
+          };
+          
+          // Create payment session with BOG API
+          const bogPayment = await bogPaymentService.createOrder(orderData);
+          
+          // Store BOG payment hash for callback validation
+          await pool.query(
+            'UPDATE balance_transactions SET payment_data = $1 WHERE id = $2',
+            [JSON.stringify({ paymentHash: bogPayment.paymentHash }), transactionId]
+          );
+          
+          paymentSession = {
+            bank: 'bog',
+            orderId: bogPayment.orderId,
+            status: 'pending',
+            paymentHash: bogPayment.paymentHash
+          };
+          
+          paymentUrl = bogPayment.paymentUrl;
+        } catch (error) {
+          console.error('BOG payment initialization error:', error);
+          // Fallback to basic payment URL if API integration fails
+          paymentUrl = `${BASE_URL}/api/balance/bog-payment?orderId=${orderId}&userId=${userId}`;
+          
+          paymentSession = {
+            bank: 'bog',
+            orderId,
+            status: 'pending',
+            error: true
+          };
+        }
+        break;
+        
+      case 'tbc':
+        // Initialize payment with TBC Bank
+        // This would implement TBC Bank's payment API
+        paymentSession = {
+          bank: 'tbc',
+          orderId,
+          status: 'pending'
+        };
+        paymentUrl = `${BASE_URL}/api/balance/tbc-payment?orderId=${orderId}&userId=${userId}`;
+        break;
+        
+      case 'flitt':
+      default:
+        // Initialize payment with Flitt (default)
+        const paymentData = {
+          orderId,
+          description: `Big Way Balance Top-up (${amount} GEL)`,
+          amount, // Amount in GEL
+          redirectUrl: `${BASE_URL}/api/balance/payment-complete?orderId=${orderId}&userId=${userId}`
+        };
+        
+        // Create payment session with Flitt
+        paymentSession = await createPaymentSession(paymentData);
+        paymentUrl = paymentSession.redirect_url || paymentSession.checkout_url;
+        break;
+    }
     
     // Update the transaction with payment session information
     await pool.query(
-      `UPDATE balance_transactions SET payment_data = $1 WHERE id = $2`,
-      [JSON.stringify(paymentSession), transactionId]
+      `UPDATE balance_transactions SET payment_data = $1, payment_provider = $2 WHERE id = $3`,
+      [JSON.stringify(paymentSession), selectedBank, transactionId]
     );
     
     // Return payment URL to client
     return res.status(200).json({
       success: true,
       orderId,
-      paymentUrl: paymentSession.redirect_url || paymentSession.checkout_url,
+      bank: selectedBank,
+      paymentUrl,
       message: 'Payment session created successfully'
     });
     
@@ -251,6 +326,557 @@ exports.paymentComplete = async (req, res) => {
     res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance/payment-complete?orderId=${orderId}&status=${status}`);
   } catch (error) {
     console.error('Error handling payment completion:', error);
+    res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance?error=payment-processing-failed`);
+  }
+};
+
+/**
+ * Handle Bank of Georgia payment page (legacy/backup route)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.bogPaymentPage = async (req, res) => {
+  try {
+    const { orderId, userId } = req.query;
+    
+    if (!orderId || !userId) {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+    
+    // Find the transaction
+    const transactionQuery = `
+      SELECT * FROM balance_transactions WHERE external_reference = $1 AND user_id = $2
+    `;
+    const transactionResult = await pool.query(transactionQuery, [orderId, userId]);
+    
+    if (transactionResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+    
+    const transaction = transactionResult.rows[0];
+    
+    // Try to redirect through BOG API if possible
+    try {
+      // Create order data for BOG API
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const orderData = {
+        amount: transaction.amount,
+        description: `Balance top-up for user #${userId}`,
+        shopOrderId: orderId,
+        redirectUrl: `${baseUrl}/api/balance/payment-complete?orderId=${orderId}&status=success`
+      };
+      
+      // Create payment session with BOG API
+      const bogPayment = await bogPaymentService.createOrder(orderData);
+      
+      // Store BOG payment hash for callback validation
+      await pool.query(
+        'UPDATE balance_transactions SET payment_data = $1 WHERE id = $2',
+        [JSON.stringify({ paymentHash: bogPayment.paymentHash }), transaction.id]
+      );
+      
+      // Redirect to the BOG payment page
+      return res.redirect(bogPayment.paymentUrl);
+    } catch (error) {
+      console.error('Failed to create BOG payment order, falling back to demo page:', error);
+      // Continue with demo payment page if BOG API fails
+    }
+    
+    // For demonstration purposes, we'll render a simple HTML page with Bank of Georgia payment form
+    // This is a fallback if the BOG API integration fails
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>საქართველოს ბანკით გადახდა</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+          }
+          .payment-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+          }
+          .bank-logo {
+            text-align: center;
+            margin-bottom: 20px;
+          }
+          .bank-logo img {
+            max-width: 200px;
+          }
+          h1 {
+            text-align: center;
+            color: #0055a5;
+            margin-bottom: 30px;
+          }
+          .form-group {
+            margin-bottom: 20px;
+          }
+          label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+          }
+          input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+          }
+          .amount-display {
+            background-color: #f0f8ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #0055a5;
+          }
+          button {
+            background-color: #0055a5;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s;
+          }
+          button:hover {
+            background-color: #003d7a;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="payment-container">
+          <div class="bank-logo">
+            <img src="https://bog.ge/img/xlogo.svg.pagespeed.ic.KR-zg_zuDw.webp" alt="Bank of Georgia Logo">
+          </div>
+          <h1>გადახდა საქართველოს ბანკით</h1>
+          <div class="amount-display">
+            ${transaction.amount} GEL
+          </div>
+          <form id="payment-form" action="/api/balance/bog-payment-callback" method="post">
+            <input type="hidden" name="orderId" value="${orderId}">
+            <input type="hidden" name="userId" value="${userId}">
+            <input type="hidden" name="amount" value="${transaction.amount}">
+            
+            <div class="form-group">
+              <label for="card-number">ბარათის ნომერი</label>
+              <input type="text" id="card-number" placeholder="XXXX XXXX XXXX XXXX" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="expiry">მოქმედების ვადა</label>
+              <input type="text" id="expiry" placeholder="MM/YY" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="cvv">CVV/CVC</label>
+              <input type="text" id="cvv" placeholder="XXX" required>
+            </div>
+            
+            <button type="submit">გადახდა</button>
+          </form>
+          
+          <script>
+            document.getElementById('payment-form').addEventListener('submit', function(e) {
+              e.preventDefault();
+              // This is a demonstration, so we'll just simulate a successful payment
+              // In a real application, you'd integrate with the actual BOG API here
+              const form = this;
+              setTimeout(() => {
+                form.submit();
+              }, 2000);
+            });
+          </script>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    console.error('Error processing BOG payment page:', error);
+    res.status(500).json({ message: 'Server error while processing payment page' });
+  }
+};
+
+/**
+ * Handle Bank of Georgia payment callback
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.handleBogPaymentCallback = async (req, res) => {
+  try {
+    // Extract payment data from callback
+    // BOG may send the data in different ways depending on their API version
+    // We'll support both direct callback and notification formats
+    const paymentData = req.body;
+    
+    if (!paymentData || (!paymentData.order_id && !paymentData.shop_order_id)) {
+      console.error('Invalid BOG payment callback data:', paymentData);
+      return res.status(400).json({ success: false, message: 'Invalid payment data' });
+    }
+    
+    // Get order ID from various possible fields
+    const orderId = paymentData.order_id || paymentData.shop_order_id || paymentData.orderId;
+    
+    // Check if this is a status update notification - if so, acknowledge it and process
+    if (paymentData.notification_type === 'payment.status.changed' || 
+        paymentData.resource_type === 'payment' || 
+        paymentData.event === 'payment.status.changed') {
+      // This is an async notification - acknowledge receipt immediately
+      res.status(200).json({ success: true, message: 'Notification received' });
+    }
+    
+    // Find the transaction record
+    const transactionQuery = `
+      SELECT * FROM balance_transactions WHERE external_reference = $1
+    `;
+    const transactionResult = await pool.query(transactionQuery, [orderId]);
+    
+    if (transactionResult.rows.length === 0) {
+      console.error('Transaction not found for order_id:', orderId);
+      
+      // Don't return error immediately if we already sent acknowledgement
+      if (!res.headersSent) {
+        return res.status(404).json({ success: false, message: 'Transaction not found' });
+      }
+      return;
+    }
+    
+    const transaction = transactionResult.rows[0];
+    
+    // Get payment details from BOG API to verify status
+    let paymentVerified = false;
+    try {
+      const paymentDetails = await bogPaymentService.getPaymentDetails(paymentData.order_id || orderId);
+      
+      // Check payment status - should be COMPLETED or APPROVED
+      if (paymentDetails && 
+          (paymentDetails.status === 'COMPLETED' || 
+           paymentDetails.status === 'APPROVED' || 
+           paymentDetails.status === 'CAPTURE' || 
+           paymentDetails.payment_status === 'PAID')) {
+        paymentVerified = true;
+      } else {
+        console.log('Payment not verified, status:', paymentDetails ? paymentDetails.status : 'unknown');
+      }
+    } catch (verifyError) {
+      console.error('Failed to verify payment with BOG API:', verifyError);
+      
+      // If the verification request failed but we have a valid transaction,
+      // check if we have a payment hash for validation
+      if (transaction.payment_data && transaction.payment_data.paymentHash) {
+        paymentVerified = bogPaymentService.validateCallback(paymentData, transaction.payment_data.paymentHash);
+      }
+    }
+    
+    // If payment is verified, proceed with transaction
+    if (paymentVerified) {
+      // Skip if transaction is already completed
+      if (transaction.status === 'completed') {
+        console.log('Transaction already completed for order_id:', orderId);
+        
+        if (!res.headersSent) {
+          return res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance/payment-complete?orderId=${orderId}&status=success`);
+        }
+        return;
+      }
+      
+      // Start database transaction
+      await pool.query('BEGIN');
+      
+      try {
+        // Update transaction status to completed
+        await pool.query(
+          `UPDATE balance_transactions SET status = 'completed', payment_data = payment_data || $1::jsonb WHERE id = $2`,
+          [JSON.stringify({
+            provider: 'bog',
+            payment_time: new Date().toISOString(),
+            payment_id: paymentData.id || paymentData.payment_id,
+            payment_status: paymentData.status || 'completed',
+            payment_details: paymentData
+          }), transaction.id]
+        );
+        
+        // Update user balance
+        await pool.query(
+          `UPDATE users SET balance = balance + $1 WHERE id = $2`,
+          [transaction.amount, transaction.user_id]
+        );
+        
+        // Commit transaction
+        await pool.query('COMMIT');
+        
+        console.log(`BOG Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
+        
+        // Only redirect if we haven't sent headers yet (wasn't an async notification)
+        if (!res.headersSent) {
+          return res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance/payment-complete?orderId=${orderId}&status=success`);
+        }
+      } catch (dbError) {
+        // Rollback transaction on database error
+        await pool.query('ROLLBACK');
+        console.error('Database error processing payment:', dbError);
+        
+        if (!res.headersSent) {
+          return res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance?error=payment-processing-failed`);
+        }
+      }
+    } else {
+      // Payment verification failed
+      console.error('Payment verification failed for order_id:', orderId);
+      
+      if (!res.headersSent) {
+        return res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance?error=payment-verification-failed`);
+      }
+    }
+  } catch (error) {
+    // Handle unexpected errors
+    try { await pool.query('ROLLBACK'); } catch (e) { /* ignore */ }
+    
+    console.error('Error processing BOG payment callback:', error);
+    
+    if (!res.headersSent) {
+      res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance?error=payment-processing-failed`);
+    }
+  }
+};
+
+/**
+ * Render TBC Bank payment page
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.tbcPaymentPage = async (req, res) => {
+  try {
+    const { orderId, userId } = req.query;
+    
+    if (!orderId || !userId) {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+    
+    // Find the transaction
+    const transactionQuery = `
+      SELECT * FROM balance_transactions WHERE external_reference = $1 AND user_id = $2
+    `;
+    const transactionResult = await pool.query(transactionQuery, [orderId, userId]);
+    
+    if (transactionResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+    
+    const transaction = transactionResult.rows[0];
+    
+    // For demonstration purposes, we'll render a simple HTML page with TBC payment form
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TBC ბანკით გადახდა</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+          }
+          .payment-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+          }
+          .bank-logo {
+            text-align: center;
+            margin-bottom: 20px;
+          }
+          .bank-logo img {
+            max-width: 140px;
+          }
+          h1 {
+            text-align: center;
+            color: #00A3E0;
+            margin-bottom: 30px;
+          }
+          .form-group {
+            margin-bottom: 20px;
+          }
+          label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+          }
+          input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+          }
+          .amount-display {
+            background-color: #f0f8ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #00A3E0;
+          }
+          button {
+            background-color: #00A3E0;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s;
+          }
+          button:hover {
+            background-color: #0082b3;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="payment-container">
+          <div class="bank-logo">
+            <img src="https://www.tbcbank.ge/web/static/media/tbc.c89cbb5a.svg" alt="TBC Bank Logo">
+          </div>
+          <h1>გადახდა თიბისი ბანკით</h1>
+          <div class="amount-display">
+            ${transaction.amount} GEL
+          </div>
+          <form id="payment-form" action="/api/balance/tbc-payment-callback" method="post">
+            <input type="hidden" name="orderId" value="${orderId}">
+            <input type="hidden" name="userId" value="${userId}">
+            <input type="hidden" name="amount" value="${transaction.amount}">
+            
+            <div class="form-group">
+              <label for="card-number">ბარათის ნომერი</label>
+              <input type="text" id="card-number" placeholder="XXXX XXXX XXXX XXXX" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="expiry">მოქმედების ვადა</label>
+              <input type="text" id="expiry" placeholder="MM/YY" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="cvv">CVV/CVC</label>
+              <input type="text" id="cvv" placeholder="XXX" required>
+            </div>
+            
+            <button type="submit">გადახდა</button>
+          </form>
+          
+          <script>
+            document.getElementById('payment-form').addEventListener('submit', function(e) {
+              e.preventDefault();
+              // This is a demonstration, so we'll just simulate a successful payment
+              const form = this;
+              setTimeout(() => {
+                form.submit();
+              }, 2000);
+            });
+          </script>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    console.error('Error processing TBC payment page:', error);
+    res.status(500).json({ message: 'Server error while processing payment page' });
+  }
+};
+
+/**
+ * Handle TBC Bank payment callback
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.handleTbcPaymentCallback = async (req, res) => {
+  try {
+    const { orderId, userId } = req.body;
+    
+    // For demonstration purposes, we'll assume the payment was successful
+    // In a real implementation, you would verify the payment with TBC API
+    
+    // Find the corresponding transaction
+    const transactionQuery = `
+      SELECT * FROM balance_transactions WHERE external_reference = $1
+    `;
+    const transactionResult = await pool.query(transactionQuery, [orderId]);
+    
+    if (transactionResult.rows.length === 0) {
+      console.error('Transaction not found for order_id:', orderId);
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+    
+    const transaction = transactionResult.rows[0];
+    
+    // Start transaction
+    await pool.query('BEGIN');
+    
+    // Update transaction status to completed
+    await pool.query(
+      `UPDATE balance_transactions SET status = 'completed', payment_data = payment_data || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({provider: 'tbc', payment_time: new Date().toISOString()}), transaction.id]
+    );
+    
+    // Update user balance
+    await pool.query(
+      `UPDATE users SET balance = balance + $1 WHERE id = $2`,
+      [transaction.amount, transaction.user_id]
+    );
+    
+    // Commit transaction
+    await pool.query('COMMIT');
+    
+    console.log(`TBC Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
+    
+    // Redirect to success page
+    res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance/payment-complete?orderId=${orderId}&status=success`);
+    
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error('Error processing TBC payment callback:', error);
     res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance?error=payment-processing-failed`);
   }
 };
