@@ -28,11 +28,18 @@ function getBasicAuthHeader() {
  */
 async function authenticate() {
   try {
+    console.log('BOG API authenticate - Starting authentication');
+    console.log(`BOG API Base URL: ${BOG_API_BASE_URL}`);
+    console.log(`BOG Client ID available: ${!!BOG_CLIENT_ID}`);
+    console.log(`BOG Secret Key available: ${!!BOG_SECRET_KEY}`);
+    
     // Check if we have a valid token
     if (bogToken && tokenExpiry && tokenExpiry > Date.now()) {
+      console.log('BOG API authenticate - Using cached token');
       return bogToken;
     }
 
+    console.log('BOG API authenticate - Requesting new token');
     const response = await axios({
       method: 'post',
       url: `${BOG_API_BASE_URL}/oauth2/token`,
@@ -67,12 +74,16 @@ async function authenticate() {
  */
 async function createOrder(orderData) {
   try {
+    console.log('BOG API createOrder - Starting with data:', JSON.stringify(orderData));
     const { amount, description, shopOrderId, redirectUrl } = orderData;
     
     // Get auth token
+    console.log('BOG API createOrder - Getting auth token');
     const token = await authenticate();
+    console.log('BOG API createOrder - Token received');
     
     // Format the payment request according to BOG API
+    console.log('BOG API createOrder - Formatting payment request');
     const paymentData = {
       intent: "CAPTURE",
       items: [
@@ -98,6 +109,10 @@ async function createOrder(orderData) {
       ]
     };
     
+    console.log('BOG API createOrder - Sending request to BOG API');
+    console.log(`BOG API URL: ${BOG_API_BASE_URL}/checkout/orders`);
+    console.log('BOG API Request Payload:', JSON.stringify(paymentData, null, 2));
+    
     const response = await axios({
       method: 'post',
       url: `${BOG_API_BASE_URL}/checkout/orders`,
@@ -107,6 +122,10 @@ async function createOrder(orderData) {
       },
       data: paymentData
     });
+    
+    console.log('BOG API createOrder - Response received');
+    console.log('BOG API Response Status:', response.status);
+    console.log('BOG API Response Data:', JSON.stringify(response.data, null, 2));
     
     if (response.data && response.data.links) {
       // Find the approve link for redirect
