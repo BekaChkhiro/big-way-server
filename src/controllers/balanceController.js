@@ -155,39 +155,64 @@ exports.initializeOnlinePayment = async (req, res) => {
             ['bog', transactionId]
           );
           
-          // Create order data for BOG API
-          // Using clientBaseUrl defined earlier
+          // Get user information for the payment
+          const userQuery = `SELECT username, email, phone FROM users WHERE id = $1`;
+          const userResult = await pool.query(userQuery, [userId]);
+          const user = userResult.rows[0] || {};
           
+          // Create order data for BOG API
           const orderData = {
             amount: amount,
             description: `Balance top-up for user #${userId}`,
             shopOrderId: orderId,
             // Use client URL for redirect back to frontend
-            redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=bog`
+            redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=bog`,
+            // Specify callback URL for payment notifications
+            callbackUrl: `${apiBaseUrl}/api/balance/bog-callback`,
+            // Order expiry time in minutes (30 minutes)
+            ttl: 30,
+            // Default currency
+            currency: "GEL",
+            // Enable all payment methods
+            paymentMethods: [
+              bogPaymentService.PAYMENT_METHODS.CARD,
+              bogPaymentService.PAYMENT_METHODS.APPLE_PAY,
+              bogPaymentService.PAYMENT_METHODS.GOOGLE_PAY,
+              bogPaymentService.PAYMENT_METHODS.BOG_P2P
+            ],
+            // Add buyer information if available
+            buyer: user.email || user.phone ? {
+              masked_email: user.email ? user.email.replace(/(^.{2})(.*)(@.*$)/, '$1****$3') : undefined,
+              masked_phone: user.phone ? user.phone.replace(/(^.{4})(.*)(.{2}$)/, '$1****$3') : undefined,
+              full_name: user.username || undefined
+            } : undefined
           };
           
           // Create payment session with BOG API
           const bogPayment = await bogPaymentService.createOrder(orderData);
           
-          // Store BOG payment hash for callback validation
+          // Store payment data for callback validation
           await pool.query(
             'UPDATE balance_transactions SET payment_data = $1 WHERE id = $2',
-            [JSON.stringify({ paymentHash: bogPayment.paymentHash }), transactionId]
+            [JSON.stringify({ 
+              orderId: bogPayment.orderId,
+              expiryDate: bogPayment.expiryDate,
+              status: bogPayment.status
+            }), transactionId]
           );
           
           paymentSession = {
             bank: 'bog',
             orderId: bogPayment.orderId,
             status: 'pending',
-            paymentHash: bogPayment.paymentHash
+            expiryDate: bogPayment.expiryDate
           };
           
           paymentUrl = bogPayment.paymentUrl;
         } catch (error) {
           console.error('BOG payment initialization error:', error);
           // Fallback to basic payment URL if API integration fails
-          // Use the clientBaseUrl constant we defined above instead of BASE_URL
-          paymentUrl = `${clientBaseUrl}/api/balance/bog-payment?orderId=${orderId}&userId=${userId}`;
+          paymentUrl = `${apiBaseUrl}/api/balance/bog-payment?orderId=${orderId}&userId=${userId}`;
           
           paymentSession = {
             bank: 'bog',
@@ -545,140 +570,144 @@ exports.bogPaymentPage = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.handleBogPaymentCallback = async (req, res) => {
+  // Get raw body for signature validation
+  const rawBody = req.rawBody || JSON.stringify(req.body);
+  const callbackSignature = req.headers['callback-signature'];
   const paymentData = req.body;
-  const client = await pool.connect();
-  console.log('BOG Callback received:', paymentData);
+  
+  console.log('BOG Callback received:', JSON.stringify(paymentData, null, 2));
+  console.log('BOG Callback signature:', callbackSignature);
   
   try {
-    // If payment data doesn't have the necessary fields, return error
-    if (!paymentData || !paymentData.order_id) {
-      console.error('BOG callback missing required fields:', paymentData);
-      return res.status(400).json({ success: false, message: 'Invalid payment data' });
-    }
+    // Immediately acknowledge receipt to meet BOG's requirements
+    // BOG expects a 200 response to confirm that we received the callback
+    res.status(200).json({ success: true, message: 'Notification received' });
     
-    // Get order ID from various possible fields
-    const orderId = paymentData.order_id || paymentData.shop_order_id || paymentData.orderId;
+    // Begin processing the callback after responding
+    const client = await pool.connect();
     
-    // Check if this is a status update notification - if so, acknowledge it and process
-    if (paymentData.notification_type === 'payment.status.changed' || 
-        paymentData.resource_type === 'payment' || 
-        paymentData.event === 'payment.status.changed') {
-      // This is an async notification - acknowledge receipt immediately
-      res.status(200).json({ success: true, message: 'Notification received' });
-    }
-    
-    // Find the transaction record
-    const transactionQuery = `
-      SELECT * FROM balance_transactions WHERE external_reference = $1
-    `;
-    const transactionResult = await pool.query(transactionQuery, [orderId]);
-    
-    if (transactionResult.rows.length === 0) {
-      console.error('Transaction not found for order_id:', orderId);
-      
-      // Don't return error immediately if we already sent acknowledgement
-      if (!res.headersSent) {
-        return res.status(404).json({ success: false, message: 'Transaction not found' });
-      }
-      return;
-    }
-    
-    const transaction = transactionResult.rows[0];
-    
-    // Get payment details from BOG API to verify status
-    let paymentVerified = false;
     try {
-      const paymentDetails = await bogPaymentService.getPaymentDetails(paymentData.order_id || orderId);
-      
-      // Check payment status - should be COMPLETED or APPROVED
-      if (paymentDetails && 
-          (paymentDetails.status === 'COMPLETED' || 
-           paymentDetails.status === 'APPROVED' || 
-           paymentDetails.status === 'CAPTURE' || 
-           paymentDetails.payment_status === 'PAID')) {
-        paymentVerified = true;
-      } else {
-        console.log('Payment not verified, status:', paymentDetails ? paymentDetails.status : 'unknown');
-      }
-    } catch (verifyError) {
-      console.error('Failed to verify payment with BOG API:', verifyError);
-      
-      // If the verification request failed but we have a valid transaction,
-      // check if we have a payment hash for validation
-      if (transaction.payment_data && transaction.payment_data.paymentHash) {
-        paymentVerified = bogPaymentService.validateCallback(paymentData, transaction.payment_data.paymentHash);
-      }
-    }
-    
-    // If payment is verified, proceed with transaction
-    if (paymentVerified) {
-      // Skip if transaction is already completed
-      if (transaction.status === 'completed') {
-        console.log('Transaction already completed for order_id:', orderId);
-        
-        if (!res.headersSent) {
-          return res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance/payment-complete?orderId=${orderId}&status=success`);
-        }
+      // Validate structure and signature of the callback
+      if (!paymentData || !paymentData.event || !paymentData.body) {
+        console.error('BOG callback has invalid structure:', paymentData);
         return;
       }
       
-      // Start database transaction
-      await pool.query('BEGIN');
+      // Validate it's a payment event
+      if (paymentData.event !== 'order_payment') {
+        console.log(`Ignoring non-payment event: ${paymentData.event}`);
+        return;
+      }
       
-      try {
-        // Update transaction status to completed
-        await pool.query(
-          `UPDATE balance_transactions SET status = 'completed', payment_data = payment_data || $1::jsonb WHERE id = $2`,
+      // Parse the callback data to extract payment information
+      const parsedData = bogPaymentService.parseCallback(paymentData);
+      
+      // Verify the signature if provided
+      let signatureValid = true;
+      if (callbackSignature) {
+        signatureValid = bogPaymentService.validateCallbackSignature(rawBody, callbackSignature);
+        if (!signatureValid) {
+          console.error('BOG callback signature validation failed');
+          return; // Exit if signature validation fails
+        }
+      }
+      
+      // Extract the external order ID (from our system)
+      const externalOrderId = parsedData.externalOrderId;
+      if (!externalOrderId) {
+        console.error('BOG callback missing external_order_id in body');
+        return;
+      }
+      
+      // Find the transaction record
+      const transactionQuery = `
+        SELECT * FROM balance_transactions WHERE external_reference = $1
+      `;
+      const transactionResult = await client.query(transactionQuery, [externalOrderId]);
+      
+      if (transactionResult.rows.length === 0) {
+        console.error('Transaction not found for external_order_id:', externalOrderId);
+        return;
+      }
+      
+      const transaction = transactionResult.rows[0];
+      
+      // Check payment status
+      const paymentStatus = parsedData.status;
+      const isSuccess = bogPaymentService.isPaymentSuccessful(paymentStatus);
+      const isFailed = bogPaymentService.isPaymentFailed(paymentStatus);
+      const isPending = bogPaymentService.isPaymentPending(paymentStatus);
+      
+      console.log(`BOG payment status: ${paymentStatus}, Success: ${isSuccess}, Failed: ${isFailed}, Pending: ${isPending}`);
+      
+      // Skip if transaction is already completed or failed
+      if (transaction.status === 'completed') {
+        console.log('Transaction already completed, ignoring callback');
+        return;
+      }
+      
+      if (isSuccess) {
+        // Start database transaction
+        await client.query('BEGIN');
+        
+        try {
+          // Update transaction status to completed
+          await client.query(
+            `UPDATE balance_transactions SET status = 'completed', payment_data = payment_data || $1::jsonb WHERE id = $2`,
+            [JSON.stringify({
+              provider: 'bog',
+              payment_time: new Date().toISOString(),
+              order_id: parsedData.orderId,
+              external_order_id: parsedData.externalOrderId,
+              payment_status: paymentStatus,
+              payment_method: parsedData.paymentMethod,
+              transaction_id: parsedData.transactionId,
+              callback_data: paymentData
+            }), transaction.id]
+          );
+          
+          // Update user balance
+          await client.query(
+            `UPDATE users SET balance = balance + $1 WHERE id = $2`,
+            [transaction.amount, transaction.user_id]
+          );
+          
+          // Commit transaction
+          await client.query('COMMIT');
+          
+          console.log(`BOG Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
+        } catch (dbError) {
+          // Rollback transaction on database error
+          await client.query('ROLLBACK');
+          console.error('Database error processing payment:', dbError);
+        }
+      } else if (isFailed) {
+        // Update transaction status to failed
+        await client.query(
+          `UPDATE balance_transactions SET status = 'failed', payment_data = payment_data || $1::jsonb WHERE id = $2`,
           [JSON.stringify({
             provider: 'bog',
             payment_time: new Date().toISOString(),
-            payment_id: paymentData.id || paymentData.payment_id,
-            payment_status: paymentData.status || 'completed',
-            payment_details: paymentData
+            order_id: parsedData.orderId,
+            external_order_id: parsedData.externalOrderId,
+            payment_status: paymentStatus,
+            reject_reason: parsedData.rejectReason,
+            callback_data: paymentData
           }), transaction.id]
         );
         
-        // Update user balance
-        await pool.query(
-          `UPDATE users SET balance = balance + $1 WHERE id = $2`,
-          [transaction.amount, transaction.user_id]
-        );
-        
-        // Commit transaction
-        await pool.query('COMMIT');
-        
-        console.log(`BOG Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
-        
-        // Only redirect if we haven't sent headers yet (wasn't an async notification)
-        if (!res.headersSent) {
-          return res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance/payment-complete?orderId=${orderId}&status=success`);
-        }
-      } catch (dbError) {
-        // Rollback transaction on database error
-        await pool.query('ROLLBACK');
-        console.error('Database error processing payment:', dbError);
-        
-        if (!res.headersSent) {
-          return res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance?error=payment-processing-failed`);
-        }
+        console.log(`BOG Payment failed for transaction ${transaction.id}: ${parsedData.rejectReason || 'Unknown reason'}`);
+      } else if (isPending) {
+        console.log(`BOG Payment is still pending for transaction ${transaction.id}, status: ${paymentStatus}`);
       }
-    } else {
-      // Payment verification failed
-      console.error('Payment verification failed for order_id:', orderId);
-      
-      if (!res.headersSent) {
-        return res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance?error=payment-verification-failed`);
-      }
+    } catch (error) {
+      console.error('Error processing BOG payment callback:', error);
+      try { await client.query('ROLLBACK'); } catch (e) { /* ignore */ }
+    } finally {
+      client.release();
     }
   } catch (error) {
-    // Handle unexpected errors
-    try { await pool.query('ROLLBACK'); } catch (e) { /* ignore */ }
-    
-    console.error('Error processing BOG payment callback:', error);
-    
-    if (!res.headersSent) {
-      res.redirect(`${process.env.CLIENT_BASE_URL || ''}/profile/balance?error=payment-processing-failed`);
-    }
+    console.error('Unexpected error in BOG callback handler:', error);
   }
 };
 

@@ -1,12 +1,12 @@
 /**
  * Bank of Georgia Payment Integration Service
- * Updated according to BOG API v1 documentation
+ * Updated according to BOG API v1 documentation (June 2025)
  */
 const axios = require('axios');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 
-// BOG API Configuration - Updated URLs according to documentation
+// BOG API Configuration - Updated URLs according to BOG API v1 documentation
 const BOG_AUTH_URL = 'https://oauth2.bog.ge/auth/realms/bog/protocol/openid-connect/token';
 const BOG_API_BASE_URL = 'https://api.bog.ge/payments/v1';
 const BOG_ECOMMERCE_URL = 'https://api.bog.ge/payments/v1/ecommerce';
@@ -83,6 +83,7 @@ async function authenticate() {
  * @param {number} [orderData.ttl=30] Order time to live in minutes
  * @param {string} [orderData.currency='GEL'] Payment currency
  * @param {Array} [orderData.paymentMethods] Allowed payment methods
+ * @param {Object} [orderData.buyer] Buyer information
  * @returns {Promise<Object>} Payment order details with redirect URL
  */
 async function createOrder(orderData) {
@@ -96,7 +97,8 @@ async function createOrder(orderData) {
       callbackUrl = "https://autovend.ge/api/balance/bog-callback",
       ttl = 30,
       currency = "GEL",
-      paymentMethods = null
+      paymentMethods = null,
+      buyer = null
     } = orderData;
     
     // Get auth token
@@ -117,8 +119,8 @@ async function createOrder(orderData) {
           {
             quantity: 1,
             unit_price: parseFloat(amount),
-            product_id: shopOrderId,
-            description: description || "Balance top-up"
+            product_id: `balance-topup-${shopOrderId}`,
+            description: description || 'Balance Top-up'
           }
         ]
       },
@@ -132,6 +134,11 @@ async function createOrder(orderData) {
     // Add payment methods if specified
     if (paymentMethods && Array.isArray(paymentMethods)) {
       paymentData.payment_method = paymentMethods;
+    }
+    
+    // Add buyer information if provided
+    if (buyer) {
+      paymentData.buyer = buyer;
     }
     
     console.log('BOG API createOrder - Sending request to BOG API');
