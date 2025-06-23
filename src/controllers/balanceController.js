@@ -149,12 +149,19 @@ exports.initializeOnlinePayment = async (req, res) => {
           );
           
           // Create order data for BOG API
-          const baseUrl = `${req.protocol}://${req.get('host')}`;
+          // Use frontend URL for redirect to ensure proper client-side handling
+          const clientBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
+          
+          console.log('Client base URL for redirect:', clientBaseUrl);
+          console.log('API base URL:', apiBaseUrl);
+          
           const orderData = {
             amount: amount,
             description: `Balance top-up for user #${userId}`,
             shopOrderId: orderId,
-            redirectUrl: `${baseUrl}/api/balance/payment-complete?orderId=${orderId}&status=success`
+            // Use client URL for redirect back to frontend
+            redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=bog`
           };
           
           // Create payment session with BOG API
@@ -358,12 +365,19 @@ exports.bogPaymentPage = async (req, res) => {
     // Try to redirect through BOG API if possible
     try {
       // Create order data for BOG API
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Use frontend URL for redirect to ensure proper client-side handling
+      const clientBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
+      
+      console.log('Client base URL for redirect:', clientBaseUrl);
+      console.log('API base URL:', apiBaseUrl);
+      
       const orderData = {
         amount: transaction.amount,
         description: `Balance top-up for user #${userId}`,
         shopOrderId: orderId,
-        redirectUrl: `${baseUrl}/api/balance/payment-complete?orderId=${orderId}&status=success`
+        // Use client URL for redirect back to frontend
+        redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=bog`
       };
       
       // Create payment session with BOG API
