@@ -168,11 +168,20 @@ async function createOrder(orderData) {
       // Extract the payment URL from _links
       console.log('BOG API _links:', JSON.stringify(response.data._links, null, 2));
       
+      // Make sure to extract the correct redirect URL from the response
+      const paymentUrl = response.data._links && response.data._links.redirect ? 
+                         response.data._links.redirect.href : null;
+      
+      if (!paymentUrl) {
+        console.error('BOG API Error: Payment URL not found in response');
+        throw new Error('Payment URL not found in BOG API response');
+      }
+      
       return {
-        orderId: response.data.order_id,
+        orderId: response.data.id, // Using 'id' as the orderId from the response
         paymentHash: shopOrderId, // For backward compatibility
-        paymentUrl: response.data._links,
-        status: response.data.status,
+        paymentUrl: paymentUrl,   // Direct URL string
+        status: response.data.status || 'created',
         expiryDate: response.data.zoned_expire_date
       };
     } else {
