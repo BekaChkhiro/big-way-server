@@ -366,7 +366,7 @@ exports.paymentComplete = async (req, res) => {
 };
 
 /**
- * Handle Bank of Georgia payment page (legacy/backup route)
+ * Handle Bank of Georgia payment page (direct redirect to BOG payment page)
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
@@ -390,177 +390,39 @@ exports.bogPaymentPage = async (req, res) => {
     
     const transaction = transactionResult.rows[0];
     
-    // Define common variables for all paths
+    // Define common variables
     const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
-    const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
     
-    console.log('Client base URL for redirect:', clientBaseUrl);
-    console.log('API base URL:', apiBaseUrl);
+    // Create order data for BOG API
+    const orderData = {
+      amount: transaction.amount,
+      description: `Balance top-up for user #${userId}`,
+      shopOrderId: orderId,
+      // Use client URL for redirect back to frontend
+      redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=bog`
+    };
     
-    // Try to redirect through BOG API if possible
-    try {
-      // Create order data for BOG API
-      
-      const orderData = {
-        amount: transaction.amount,
-        description: `Balance top-up for user #${userId}`,
-        shopOrderId: orderId,
-        // Use client URL for redirect back to frontend
-        redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=bog`
-      };
-      
-      // Create payment session with BOG API
-      const bogPayment = await bogPaymentService.createOrder(orderData);
-      
-      // Store BOG payment hash for callback validation
-      await pool.query(
-        'UPDATE balance_transactions SET payment_data = $1 WHERE id = $2',
-        [JSON.stringify({ paymentHash: bogPayment.paymentHash }), transaction.id]
-      );
-      
-      // Redirect to the BOG payment page
-      return res.redirect(bogPayment.paymentUrl);
-    } catch (error) {
-      console.error('Failed to create BOG payment order, falling back to demo page:', error);
-      // Continue with demo payment page if BOG API fails
-    }
+    // Create payment session with BOG API
+    const bogPayment = await bogPaymentService.createOrder(orderData);
     
-    // For demonstration purposes, we'll render a simple HTML page with Bank of Georgia payment form
-    // This is a fallback if the BOG API integration fails
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>საქართველოს ბანკით გადახდა</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-          }
-          .payment-container {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            width: 100%;
-            max-width: 500px;
-          }
-          .bank-logo {
-            text-align: center;
-            margin-bottom: 20px;
-          }
-          .bank-logo img {
-            max-width: 200px;
-          }
-          h1 {
-            text-align: center;
-            color: #0055a5;
-            margin-bottom: 30px;
-          }
-          .form-group {
-            margin-bottom: 20px;
-          }
-          label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: #333;
-          }
-          input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-            box-sizing: border-box;
-          }
-          .amount-display {
-            background-color: #f0f8ff;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            text-align: center;
-            font-size: 24px;
-            font-weight: bold;
-            color: #0055a5;
-          }
-          button {
-            background-color: #0055a5;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 12px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            width: 100%;
-            transition: background-color 0.3s;
-          }
-          button:hover {
-            background-color: #003d7a;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="payment-container">
-          <div class="bank-logo">
-            <img src="https://bog.ge/img/xlogo.svg.pagespeed.ic.KR-zg_zuDw.webp" alt="Bank of Georgia Logo">
-          </div>
-          <h1>გადახდა საქართველოს ბანკით</h1>
-          <div class="amount-display">
-            ${transaction.amount} GEL
-          </div>
-          <form id="payment-form" action="/api/balance/bog-payment-callback" method="post">
-            <input type="hidden" name="orderId" value="${orderId}">
-            <input type="hidden" name="userId" value="${userId}">
-            <input type="hidden" name="amount" value="${transaction.amount}">
-            
-            <div class="form-group">
-              <label for="card-number">ბარათის ნომერი</label>
-              <input type="text" id="card-number" placeholder="XXXX XXXX XXXX XXXX" required>
-            </div>
-            
-            <div class="form-group">
-              <label for="expiry">მოქმედების ვადა</label>
-              <input type="text" id="expiry" placeholder="MM/YY" required>
-            </div>
-            
-            <div class="form-group">
-              <label for="cvv">CVV/CVC</label>
-              <input type="text" id="cvv" placeholder="XXX" required>
-            </div>
-            
-            <button type="submit">გადახდა</button>
-          </form>
-          
-          <script>
-            document.getElementById('payment-form').addEventListener('submit', function(e) {
-              e.preventDefault();
-              // This is a demonstration, so we'll just simulate a successful payment
-              // In a real application, you'd integrate with the actual BOG API here
-              const form = this;
-              setTimeout(() => {
-                form.submit();
-              }, 2000);
-            });
-          </script>
-        </div>
-      </body>
-      </html>
-    `;
+    // Store payment data for callback validation
+    await pool.query(
+      'UPDATE balance_transactions SET payment_data = $1 WHERE id = $2',
+      [JSON.stringify({ 
+        orderId: bogPayment.orderId,
+        expiryDate: bogPayment.expiryDate,
+        status: bogPayment.status 
+      }), transaction.id]
+    );
     
-    res.setHeader('Content-Type', 'text/html');
-    res.send(html);
+    // Immediately redirect to the BOG payment page
+    return res.redirect(bogPayment.paymentUrl);
   } catch (error) {
-    console.error('Error processing BOG payment page:', error);
-    res.status(500).json({ message: 'Server error while processing payment page' });
+    console.error('Error processing BOG payment redirect:', error);
+    
+    // Redirect to frontend with error status
+    const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
+    return res.redirect(`${clientBaseUrl}/profile/balance?status=failed&error=payment-initialization-failed&provider=bog`);
   }
 };
 
