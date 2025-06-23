@@ -31,6 +31,9 @@ router.post('/purchase-vip', authMiddleware, balanceController.purchaseVipStatus
 // Get transaction history
 router.get('/transactions', authMiddleware, balanceController.getTransactionHistory);
 
+// Check payment status by orderId
+router.get('/payment-status/:orderId', authMiddleware, balanceController.checkPaymentStatus);
+
 // Get all transactions (admin only)
 router.get('/admin/transactions', authMiddleware, balanceController.getAdminTransactions);
 

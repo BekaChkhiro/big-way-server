@@ -527,14 +527,14 @@ exports.bogPaymentPage = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.handleBogPaymentCallback = async (req, res) => {
+  const paymentData = req.body;
+  const client = await pool.connect();
+  console.log('BOG Callback received:', paymentData);
+  
   try {
-    // Extract payment data from callback
-    // BOG may send the data in different ways depending on their API version
-    // We'll support both direct callback and notification formats
-    const paymentData = req.body;
-    
-    if (!paymentData || (!paymentData.order_id && !paymentData.shop_order_id)) {
-      console.error('Invalid BOG payment callback data:', paymentData);
+    // If payment data doesn't have the necessary fields, return error
+    if (!paymentData || !paymentData.order_id) {
+      console.error('BOG callback missing required fields:', paymentData);
       return res.status(400).json({ success: false, message: 'Invalid payment data' });
     }
     
@@ -1386,5 +1386,130 @@ exports.purchaseVipStatus = async (req, res) => {
     await pool.query('ROLLBACK');
     console.error('Error purchasing VIP status:', error);
     return res.status(500).json({ message: 'Server error while purchasing VIP status' });
+  }
+};
+
+/**
+ * Check payment status by orderId
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.checkPaymentStatus = async (req, res) => {
+  const { orderId } = req.params;
+  const userId = req.user.id;
+  
+  if (!orderId) {
+    return res.status(400).json({
+      success: false,
+      status: 'failed',
+      message: 'Order ID is required'
+    });
+  }
+  
+  try {
+    // Find the transaction in database
+    const query = `
+      SELECT * FROM balance_transactions 
+      WHERE external_reference = $1 AND user_id = $2
+    `;
+    const result = await pool.query(query, [orderId, userId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        status: 'failed',
+        message: 'Transaction not found'
+      });
+    }
+    
+    const transaction = result.rows[0];
+    
+    // If the transaction is from Bank of Georgia, verify with BOG API
+    if (transaction.payment_provider === 'bog') {
+      try {
+        // Get payment details from BOG API
+        const paymentDetails = await bogPaymentService.getPaymentDetails(orderId);
+        
+        if (paymentDetails) {
+          // Map BOG payment status to our status
+          let status = 'pending';
+          
+          if (['COMPLETED', 'APPROVED', 'CAPTURE'].includes(paymentDetails.status) || 
+              paymentDetails.payment_status === 'PAID') {
+            status = 'completed';
+          } else if (['REJECTED', 'FAILED', 'EXPIRED', 'CANCELED'].includes(paymentDetails.status)) {
+            status = 'failed';
+          }
+          
+          // If status is different from what we have in DB, update it
+          if (status !== transaction.status && status === 'completed') {
+            // Start transaction
+            const client = await pool.connect();
+            
+            try {
+              await client.query('BEGIN');
+              
+              // Update transaction status
+              const updateTransactionQuery = `
+                UPDATE balance_transactions
+                SET status = $1, updated_at = NOW()
+                WHERE id = $2
+              `;
+              await client.query(updateTransactionQuery, ['completed', transaction.id]);
+              
+              // Update user's balance if status changed to completed
+              if (status === 'completed' && transaction.status !== 'completed') {
+                const updateBalanceQuery = `
+                  UPDATE users
+                  SET balance = balance + $1
+                  WHERE id = $2
+                `;
+                await client.query(updateBalanceQuery, [parseFloat(transaction.amount), userId]);
+              }
+              
+              await client.query('COMMIT');
+              
+              // Update local transaction status for response
+              transaction.status = status;
+            } catch (err) {
+              await client.query('ROLLBACK');
+              console.error('Error updating transaction status:', err);
+            } finally {
+              client.release();
+            }
+          }
+          
+          // Return payment status details
+          return res.json({
+            success: true,
+            status: transaction.status,
+            orderId,
+            amount: transaction.amount,
+            provider: transaction.payment_provider,
+            updated: transaction.updated_at
+          });
+        }
+      } catch (error) {
+        console.error('Error checking BOG payment status:', error);
+        // Fall back to database status on error
+      }
+    }
+    
+    // Return the status from our database if we couldn't verify with the payment provider
+    return res.json({
+      success: true,
+      status: transaction.status,
+      orderId,
+      amount: transaction.amount,
+      provider: transaction.payment_provider,
+      updated: transaction.updated_at
+    });
+  } catch (error) {
+    console.error('Error checking payment status:', error);
+    res.status(500).json({
+      success: false,
+      status: 'failed',
+      message: 'Failed to check payment status'
+    });
   }
 };
