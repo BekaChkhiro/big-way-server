@@ -150,7 +150,7 @@ exports.initializeOnlinePayment = async (req, res) => {
           
           // Create order data for BOG API
           // Use frontend URL for redirect to ensure proper client-side handling
-          const clientBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
           const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
           
           console.log('Client base URL for redirect:', clientBaseUrl);
@@ -184,7 +184,8 @@ exports.initializeOnlinePayment = async (req, res) => {
         } catch (error) {
           console.error('BOG payment initialization error:', error);
           // Fallback to basic payment URL if API integration fails
-          paymentUrl = `${BASE_URL}/api/balance/bog-payment?orderId=${orderId}&userId=${userId}`;
+          // Use the clientBaseUrl constant we defined above instead of BASE_URL
+          paymentUrl = `${clientBaseUrl}/api/balance/bog-payment?orderId=${orderId}&userId=${userId}`;
           
           paymentSession = {
             bank: 'bog',
@@ -366,7 +367,7 @@ exports.bogPaymentPage = async (req, res) => {
     try {
       // Create order data for BOG API
       // Use frontend URL for redirect to ensure proper client-side handling
-      const clientBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
       const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
       
       console.log('Client base URL for redirect:', clientBaseUrl);
