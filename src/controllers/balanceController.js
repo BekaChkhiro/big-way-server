@@ -138,6 +138,13 @@ exports.initializeOnlinePayment = async (req, res) => {
     let paymentSession;
     let paymentUrl;
     
+    // Define common variables for all payment providers
+    const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
+    const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
+    
+    console.log('Client base URL for redirect:', clientBaseUrl);
+    console.log('API base URL:', apiBaseUrl);
+    
     // Initialize payment based on selected bank
     switch (selectedBank) {
       case 'bog':
@@ -149,12 +156,7 @@ exports.initializeOnlinePayment = async (req, res) => {
           );
           
           // Create order data for BOG API
-          // Use frontend URL for redirect to ensure proper client-side handling
-          const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
-          const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
-          
-          console.log('Client base URL for redirect:', clientBaseUrl);
-          console.log('API base URL:', apiBaseUrl);
+          // Using clientBaseUrl defined earlier
           
           const orderData = {
             amount: amount,
@@ -363,15 +365,16 @@ exports.bogPaymentPage = async (req, res) => {
     
     const transaction = transactionResult.rows[0];
     
+    // Define common variables for all paths
+    const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
+    const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
+    
+    console.log('Client base URL for redirect:', clientBaseUrl);
+    console.log('API base URL:', apiBaseUrl);
+    
     // Try to redirect through BOG API if possible
     try {
       // Create order data for BOG API
-      // Use frontend URL for redirect to ensure proper client-side handling
-      const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
-      const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
-      
-      console.log('Client base URL for redirect:', clientBaseUrl);
-      console.log('API base URL:', apiBaseUrl);
       
       const orderData = {
         amount: transaction.amount,
