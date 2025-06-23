@@ -6,9 +6,9 @@ const crypto = require('crypto');
 
 // BOG API Configuration
 const BOG_API_BASE_URL = 'https://ipay.ge/opay/api/v1';
-// Using the client_id and secret_key from the documentation
-const BOG_CLIENT_ID = process.env.BOG_CLIENT_ID || '10001626'; // Test merchant ID
-const BOG_SECRET_KEY = process.env.BOG_SECRET_KEY || 'rc7zrDXcrsXU'; // Test secret key
+// Using real credentials
+const BOG_CLIENT_ID = process.env.BOG_CLIENT_ID || '10001626'; // Real merchant ID
+const BOG_SECRET_KEY = process.env.BOG_SECRET_KEY || 'rc7zrDXcrsXU'; // Real secret key
 
 // Token storage
 let bogToken = null;
