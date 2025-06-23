@@ -1,459 +1,783 @@
-Introduction
-What is the Online Payment API
-The Online Payment API allows embedding easily the payment module into any kind of Online Shop. It gives the possibility to integrate with an Online Shop via the simple interface which covers transactions performed by a VISA, Mastercard, and American Express cards issued by the Bank of Georgia or by the other commercial banks.
-
-What is needed for the integration
-To establish the integration, the Merchant should be a customer of the Bank of Georgia and own an account at the businessonline.ge. The Company’s primary info fields should be fulfilled in the Bank along with the iPay parameters (Callback URLs of the Payment and Payment Amount Return on which Bank will notify Merchant regarding the result respective operation) for Merchant to fully use the Online Payment feature. The Callback URL information should be provided to the Bank in a digital format. After filling in the Company’s primary fields, the Merchant will be in a pending mode with an assigned unique identifier in the Bank system, however, it will have a blocked state. Within this period, every attempt for a payment incoming from an Online Shop will receive an error. Once the iPay parameter is provided, the complete integration and testing can be performed for an Online Shop.
-
-Protocol and Technical Specifications
-API architecture: Restful Online Payment Application protocol: HTTP/1.1. To enhance security it is mandatory to call all API methods using HTTPS, which is an extension of the HTTP protocol. Service call type: Synchronous Security protocol: OAuth 2.0 Information exchange security standard: JSON Web Tokens (JWT).
-
-BASE URL
-https://ipay.ge/opay/api/v1
-
-Short Description of a Process
-Below we introduce the brief review of the full cycle of the Online Payment Checkout:
-
-The customer chooses a product or a shopping basket on the Online Shop webpage and presses a ‘Payment’ button
-Online Shop sends a request to an Online Payment Server
-The server returns a parameter needed in order to proceed with the payment
-Online Shop redirects the customer to an Online Payment Webpage
-The customer provides a card or online banking info on an Online Payment Webpage and completes the payment
-Online Payment Server returns a response to a Merchant (Callback)
-The transaction is successfully completed
-
 Authentication Method
-What I need to use the Payment API
-An HTTP Basic Authentication is needed in order to use an Online Payment API. To do so, you need to know the merchant’s unique credentials for accessing the system. The credentials consist of two parameters: client_id and secret_key, which are used as a username and a password for the Merchant Authentication.
+What do I need to use the payment API?
+To use the payment API, HTTP Basic Auth is required. You will need to know the unique credentials4 of your business to enter the system. These credentials consist of two parameters, client_id, and client_secret, used as the username and password for business authentication.
 
-How to find out the Merchant’s system credentials
-The company receives the client_id and the secret_key once it has been registered in the Bank system as a Merchant and has filled in all necessary data. Those credentials are the unique identifier for the Merchant. Along with that, a secret_key is used as a password. It is prohibited to make it public or disclose to a third party. Violation might increase the likelihood of danger for an Online Shop! Secret_key cannot be changed by the Merchant.
+How to obtain the credentials for entering the business system?
+Upon registering a company as a business in the banking system and providing all the necessary data, the system provides the credentials client_id and client_secret necessary to enter the system. These credentials are unique identifiers of the business. It is impermissible to disclose or transfer the client_secret parameter to another person. Doing so significantly increases the probability of a security breach. The business cannot change the client_secret parameter.
 
-Method Description
-Via the given method a Merchant passes the authentication. On calling this method, the Online Payment Server returns a ‘Bearer Token’ which is used as a mandatory parameter for the authentication when calling all further methods.
+Method description
+This method allows businesses to undergo the authentication process. Upon calling the API, the online payment server returns the Bearer Token, which is the necessary authentication parameter for calling all further methods.
 
-client_id: 1006
-secret_key: 581ba5eeadd657c8ccddc74c839bd3ad
+Header parameters
+Content-Type
+required
+application/x-www-form-urlencoded
+Authorization
+required
+Basic <base64>
+'Basic ' + '<client_id>:<secret_key>' encoded in the Base64 format is transmitted as a value (e.g., 'Basic ODI4Mjo3Njk3MDY0OTlmMDcwOWUyMzQ4NDU4NjNmOThiMjMxNA=='), where <client_id> and <secret_key> are the credentials necessary to enter the system, transmitted by the bank to the business.
 
-Header:
-Authorization: Basic MTY2Njo1ODFiYTVlZWFkZDY1N2M4Y2NkZGM3NGM4MzliZDNhZA==
+Body parameters
+grant_type
+required
+client_credentials
+The fixed text client_credentials is transmitted as the value.
 
-HTTP
-POST /api/v1/oauth2/token HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-Authorization: Basic <base64>
+CURL
+curl -X POST 'https://oauth2.bog.ge/auth/realms/bog/protocol/openid-connect/token' \
+-u {client_id}:{client_secret} \
+-H 'Content-Type: application/x-www-form-urlencoded' \
+--data-urlencode 'grant_type=client_credentials'
+
+Response
+access_token
+string
+The Token is returned by the authorization server.
+
+token_type
+string
+The type of Token (fixed value – Bearer – is returned).
+
+expires_in
+number
+The number of seconds while the Token is active.
+
+RESPONSE
+{
+  "access_token": "<JWT>",
+  "token_type": "Bearer",
+  "expires_in": 1634719923245
+}
 
 Order Request
-By calling this method an Online Shop sends the payments details, technical parameters, and a payment amount to a Payment Server. To proceed further in case of the successful operation, a customer should be redirected to an Online Payment Webpage as per a REDIRECT URL returned in a links parameter
+To place an order request, businesses must send payment details, technical specifications, and the amount to be paid to the online payment server. If the process is successful, the customer should be redirected to the online payment page at the redirect address returned to the _link parameter to complete the payment.
 
-Parameters
-intent
+Header parameters
+Content-Type
 required
-CAPTURE | AUTHORIZE
-Defines which payment method can be used by the customer for payment CAPTURE - allows a customer to choose either to perform payment via card or via using Bank of Georgia’s internet-banking credentials. AUTHORIZE - allows a customer to perform a payment only by providing a card information.
+application/json
+Authorization
+required
+Basic <base64>
+Bearer <jwt_token>, where jwt_token is the token returned in the access_token parameter of the authentication method response.
 
-items
-required
-array
-The list of products purchased in the Online Shop within a given purchase
-
-amount
-required
-string
-A price of a single purchased item
-description
-required
-string
-A name of a purchased item (description)
-quantity
-required
-number
-A number of purchased items
-product_id
-required
-string
-An ID of a purchased item in the Online Shop system
-locale
+Idempotency-Key
 optional
-ka | en-US
-Defines the language of the Online Payment Webpage on which a customer will be redirected.
-Can have one of the following two values:
+UUID v4
+The Idempotency-Key parameter should be unique for each new API request. Subsequent requests to the same API endpoint with the same Idempotency-Key header will result in the server returning the same status code and response body as the initial request. This functionality is particularly useful to ensure consistent outcome in scenarios where network issues or retries may lead to duplicate requests.
 
-ka – Georgian
-en-US – US English.
-shop_order_id
+Accept-Language
 optional
 string
-A Payment Indentificator from an Online Shop system (i.e.: An ID of a shopping Basket).
+The language of the interface that the customer will see when redirected to the online payment page. The possible values are:
 
-redirect_url
+ka - Georgian (default)
+en - English.
+Theme
+optional
+string
+The theme of the interface that the customer will see when redirected to the online payment page. The possible values are:
+
+light - Light (default)
+dark - Dark.
+Body parameters
+application_type
+optional
+"web" | "mobile"
+Defines the type of application from which the order was created. This parameter is used specifically when an order is created using Apple Pay, directly from the merchant's webpage or mobile application. application_type has two values:
+
+web - For orders created from a webpage.
+mobile - For orders created from a mobile application.
+buyer
+optional
+object
+Information about the buyer.
+
+buyer.full_name
+optional
+string
+The buyer's name and surname.
+buyer.masked_email
+optional
+string
+The buyer's masked email address.
+buyer.masked_phone
+optional
+string
+The buyer's masked phone number.
+callback_url
 required
 string
-An address (URL) of a webpage of the Online Shop to which a customer will be redirected from the Online Payment System once the payment transaction is completed successfully or unsuccessfully
-
-show_shop_order_id_on_extract
+The web address of the business (must be HTTPS), which will be automatically called by the bank upon completion of the payment to provide the business with the payment details (via Callback).
+external_order_id
 optional
-boolean
-Defines what kind of payment info will be shown to a customer on an Online Payment Webpage.
-Can have one of the following values:
-false - Customer will see in the payment statement the first 25 symbols of product description list divided by “,” from items array.
-true - the payment statement will be similar to the case of "false", however it will be prefixed with a shop_order_id.
-
-capture_method
+string
+The payment identifier from the business system (e.g., the purchase basket identifier).
+capture
 optional
-AUTOMATIC | MANUAL
-Payment method which can have one of the two following values:
-
-AUTOMATIC - Payment will be performed without a pre-authorization, meaning that a Payment Amount will be immediately deducted from a customer’s account balance.
-MANUAL - A Payment Amount will be blocked on a customer’s account balance and will not be available for a customer. In this case, the pre-authorization method should be used to complete the payment transaction or the return method should be used to unblock/return the Payment Amount. The Payment Amount is automatically unblocked and available for a customer.
-If the operation is not completed in 30 days.
-
+"automatic" | "manual"
+The transaction type takes two values:
+automatic - creation of a standard order, payment will be made without pre-authorization, and the amount will be immediately withdrawn from the customer’s account.
+manual - after payment, the amount on the customer’s account will be blocked and will not be available for the customer. To complete the payment, it is necessary to use the pre-authorization completing method and confirm/reject the transaction. If this operation is not performed within 30 days, the amount will be automatically unblocked and will be available again for the customer. This feature can only be used when paying through Apple Pay, Google Pay or by a card.
 purchase_units
 required
-array
-Contains information about the Payment Amount and currency.
-
-amount
-required
 object
-A Payment Amount object
+The purchase information.
 
-currency_code
+purchase_units.basket
 required
-GEL
-A payment currency. Always should have a value "GEL".
+array
+A basket of products or services purchased within a given payment in a business.
 
-value
+purchase_units.basket[].product_id
+required
+string
+The purchased product/service identifier in the business system.
+purchase_units.basket[].description
+optional
+string
+The name (description) of the purchased product/service.
+purchase_units.basket[].quantity
 required
 number
-A Payment Amount value.
-
-REQUEST
-POST /api/v1/checkout/orders
-Content-Type: application/json
-Authorization: Bearer <jwt_token>
-
-{
-  "intent": "CAPTURE",
-  "items": [
-    {
-      "amount": "10.50",
-      "description": "test_product",
-      "quantity": "1",
-      "product_id": "123456"
-    }
-  ],
-  "locale": "ka",
-  "shop_order_id": "123456",
-  "redirect_url": "https://demo.ipay.ge?shop_order_id=<shop_order_id>",
-  "show_shop_order_id_on_extract": true,
-  "capture_method": "AUTOMATIC",
-  "purchase_units": [
-    {
-      "amount": {
-        "currency_code": "GEL",
-        "value": "10.50"
-      }
-    }
-  ]
-}
-
-Response
-status
+The quantity (volume) of each product/service. The minimum value is 1.
+purchase_units.basket[].unit_price
+required
+number
+The purchased product/service unit price.
+purchase_units.basket[].unit_discount_price
+optional
+number
+The volume of the deducted amount on the product/service unit in case of discount payment.
+purchase_units.basket[].vat
+optional
+number
+The value added tax (VAT) of the purchased product/service.
+purchase_units.basket[].vat_percent
+optional
+number
+The percentage of value added tax (VAT) of the purchased product/service.
+purchase_units.basket[].total_price
+optional
+number
+The total price of the purchased product/service.
+purchase_units.basket[].image
+optional
 string
-A status of an Online Payment.
-
-payment_hash
+The web address of the product/service image.
+purchase_units.basket[].package_code
+optional
 string
-A unique hashed payment identifier generated by an Online Payment System during requesting an order. On the next step, a hashed identifier will be again passed from the Bank to a Merchant. Verifying the identifier provides additional security.
+The product code of the purchased product/service.
+purchase_units.basket[].tin
+optional
+string
+The taxpayer identification number (TIN).
+purchase_units.basket[].pinfl
+optional
+string
+The personal identification number of an individual (PINFL).
+purchase_units.basket[].product_discount_id
+optional
+string
+Product discount identifier. If a discount promotion is registered in the bank with the provided value, taking into account the terms of the discount, the corresponding promotion will be applied to the order.
+purchase_units.delivery
+optional
+object
+Information about the delivery service.
 
-links
+purchase_units.delivery.amount
+optional
+number
+The delivery fee.
+purchase_units.total_amount
+required
+number
+The full amount is to be paid.
+purchase_units.total_discount_amount
+optional
+number
+The reduced amount in case of payment with a discount.
+purchase_units.currency
+optional
+string
+The currency in which payment is made:
+
+GEL - Georgian Lari (default)
+USD - US dollar
+EUR - Euro
+GBP - British pound.
+redirect_urls
+optional
+object
+The business web addresses that customers can be redirected to from the online payment system upon completion of the payment.
+
+redirect_urls.success
+optional
+string
+The web address in the case of successful completion of the transaction. If it is empty, the customer will remain on the online payments page and a corresponding receipt will be shown.
+redirect_urls.fail
+optional
+string
+The web address in the case of unsuccessful completion of the transaction. If it is empty, the customer will remain on the online payments page and a corresponding receipt will be shown.
+ttl
+optional
+number
+Specifies the duration of the order lifespan in minutes (the number of minutes a customer will be able to pay). The logic of this parameter can vary depending on the business's industry. The minimum value is 2 minutes, and the maximum is 1440 minutes (24 hours). If this parameter is left empty, the system defaults to 15 minutes.
+payment_method
+optional
 array
-Addresses of the web resources which are used on the next steps of the payment process. There are two kinds of resources which could be returned at the moment:
+The payment methods that a customer can use to pay for the order. The business must have all the methods it provides here activated. If the parameter is left empty, upon redirecting a customer to the online payment page, they will be able to use all the payment methods available for the business. The possible values are:
 
-A Payment Details Address which gives the possibility to retrieve information regarding the online payment (rel = self).
-A webpage Address on which a customer should be redirected to fill in the plastic card details or the online banking details and to finalize a payment process (rel = approve).
-href
-string
-A Web resource Address.
+card - payment by a bank card
+google_pay - payment through Google Pay and by a bank card (in the case of providing this option, the customer will be able to pay both by Google Pay and a bank card. The Business must have both payment methods activated)
+apple_pay - payment through Apple Pay and by a bank card (in the case of providing this option, the customer will be able to pay both by Apple Pay and a bank card. The Business must have both payment methods activated)
+bog_p2p - transferring by the BoG, internet, or mobile bank user
+bog_loyalty - payment by the BoG MR/Plus points
+bnpl - payment with Buy Now Pay Later plan
+bog_loan - standard bank installment plan
+gift_card - payment with a gift card
+config
+optional
+object
+Configuration of a specific payment.
 
-rel
-string
-A Web resource unique name.
+config.loan
+optional
+object
+Payment configuration. Transmission of a parameter is necessary if you wish the payment to be made only by installment plan ("payment_method":["bog_loan"]) or only by bnpl ("payment_method":["bnpl"]).
 
-method
+config.loan.type
+optional
 string
-An HTTP method that should be used to redirect on the web resource (GET, REDIRECT…)
+Discount code of the installment/bnpl (the value of the discount_code parameter returned by the calculator).
+config.loan.month
+optional
+number
+Duration of the installment/bnpl in months (the value of the month parameter returned by the calculator).
+config.campaign
+optional
+object
+Duration of the installment/bnpl in months (the value of the month parameter returned by the calculator).
 
-order_id
+config.campaign.card
+optional
 string
-An online Payment Identifier.
+A card type, to which the discount applies to:
+
+visa - Visa
+mc - MasterCard
+solo - SOLO card
+config.campaign.type
+optional
+string
+Discount type:
+restrict - card type restriction
+client_discount - discount on a specific card type
+config.google_pay
+optional
+object
+Payment configuration. Transmission of a parameter is necessary if you wish to make Google Pay payment from your own webpage.
+
+config.google_pay.google_pay_token
+optional
+string
+Full string representing the encrypted Google Pay payment details. It must include all nested fields as received from the Google Pay SDK without modification or truncation.
+config.google_pay.external
+optional
+boolean
+true - payment is initiated from the Google Pay button on business' webpage
+false - Payment is initiated from the bank's webpage (default).
+config.apple_pay
+optional
+object
+Payment configuration. This parameter is necessary if you wish to enable Apple Pay payments from your own webpage.
+
+config.apple_pay.external
+optional
+boolean
+true -Payment is initiated from the Apple Pay button on the business's webpage.
+false - Payment is initiated from the bank's webpage (default).
+config.account
+optional
+object
+Payment configuration: This object is necessary if you have configured multiple e-commerce POS terminals in the same currency. It allows you to group payments based on business needs or settle payments on different business bank accounts.
+
+config.account.tag
+optional
+string
+E-commerce POS identifier. If provided tag does not match with POS configuration or tag was not provided, the operation will default to the default POS terminal and its corresponding payment account. Note: It is important to agree upon tag values when configuring additional ecommerce POS terminal.
+
+CURL
+curl -X POST 'https://api.bog.ge/payments/v1/ecommerce/orders' \
+-H 'Accept-Language: ka' \
+-H 'Authorization: Bearer <token>' \
+-H 'Content-Type: application/json' \
+--data-raw '{
+    "callback_url": "https://example.com/callback",
+    "external_order_id": "id123",
+    "purchase_units": {
+        "currency": "GEL",
+        "total_amount": 1,
+        "basket": [
+            {
+                "quantity": 1,
+                "unit_price": 1,
+                "product_id": "product123"
+            }
+        ]
+    },
+    "redirect_urls": {
+        "fail": "https://example.com/fail",
+        "success": "https://example.com/success"
+    }
+}'
 
 Payment Details
-By calling this method an Online Shop can receive detailed information regarding a payment based on the payment identifier. A different response with payment details will be returned depending on which payment option is used (a card or an internet-banking user) and what kind of payment method is used (with or without a pre-authorization)
+This method allows businesses to receive detailed information about an online payment using its identifier.
 
-Parameters
+Header parameters
+Authorization
+required
+Basic <base64>
+The meaning Bearer <jwt_token> is transmitted, where jwt_token is the meaning returned to the access_token parameter of the Response method.
+
+Path parameter
 order_id
 required
 string
-An online payment ID returned to the Online Shop in response to the payment request method
-REQUEST
-GET /api/v1/checkout/payment/{order_id}
-Content-Type: application/json
-Authorization: Bearer <jwt_token>
+The order identifier returned to the online shop in the response of the create order request.
+CURL
+curl -X GET 'https://api.bog.ge/payments/v1/receipt/:order_id' \
+-H 'Authorization: Bearer <token>'
 
 Response
-status
-success | error | in_progress
-Payment Status. Can have one of the three following values.
-
-success - A payment is successful.
-error - A payment is unsuccessful.
-in_progress - A payment is not completed and if in one hour from an order generation a customer will not complete a payment, it will be automatically canceled and status will change to an error. This status is assigned to a payment when a customer is being redirected to the Bank’s Online Payment Webpage. While the change of this status happens once the payment is complete either successfully or unsuccessfully.
-payment_hash
-string
-payment_hash should be stored on a Merchant side. The values received from a Callback method in a payment_hash and an order_id should be compared to the ones stored on a Merchant side.
-
-ipay_payment_id
-string
-A payment ID that is shown on a payment receipt.
-status_description
-string
-shop_order_id
-string
-A Payment ID from an Online Shop system (i.e.: An ID of a shopping Basket).
-payment_method
-string
-Payment Method.
-
-BOG_CARD A payment is performed with an authorization.
-GC_CARD A payment is performed using a card.
-BOG_LOAN An installment purchase.
-BOG_LOYALTY A payment is performed utilizing PLUS or MR points.
-UNKNOWN In case an order status is error or in_progress.
-card_type
-string
-In this parameter, a card type is passed when a payment method is BOG_CARD or GC_CARD. In all other cases, an UNKNOWN should be passed in this parameter
-
-MC - Mastercard
-VISA - Visa
-AMEX - American Express
-pan
-string
-A 16-digit card number. Only the first 6 and last 4 digits are displayed. The rest digits are replaced by an * symbol. This parameter is filled only if a payment status is success and a payment_method is GC_CARD
-
-transaction_id
-string
-Transaction ID. Is filled only when the payment status is success and payment_method is GC_CARD.
-
-pre_auth_status
-string
-Pre-authorization status. Is returned only when during an order generation a capture_method is MANUAL and the order status is success
-
-success - Pre-authorization is verified and the payment amount is transferred to a Merchant.
-in_progress - Pre-authorization is in progress. A payment amount is blocked and it is possible to verify and unblock it.
-success_unblocked - Pre-authorization is unblocked. A payment Amount is returned to a customer account and is available for a customer.
-BOG Payment
-Card Payment
-Pre-auth Payment
-{
-  "status": "success",
-  "order_id": "{order_id}",
-  "payment_hash": "{payment_hash}",
-  "ipay_payment_id": "{ipay_payment_id}",
-  "status_description": "PERFORMED",
-  "shop_order_id": "123456789",
-  "payment_method": "BOG_CARD",
-  "card_type": "MC",
-}
-
-Payment Amount Return
-By calling this method an Online Shop can return a Payment Amount fully or partially. Return of a Payment Amount cannot be canceled. Calling method for returning a Payment Amount partially is possible until the sum of partially returned Payment Amount reaches the full paid amount.
-
-Parameters
 order_id
-required
 string
-A payment ID for which a return of the Payment Amount is performed
-amount
-optional
-number
-An amount to be returned back. Passing a value in this parameter is mandatory when the partial return is performed. The full amount will be returned back when this parameter is not passed. The value passed in this parameter cannot be greater than or equal to the full Payment Amount
-REQUEST
-POST /opay/api/v1/checkout/refund HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-Authorization: Bearer <jwt_token>
-
-order_id=order_id
-amount=amount
-
-Recurring Payments
-The recurring Payments method gives a possibility to store a customer’s data and to perform a payment without a customer’s interaction.
-
-To perform a Recurring Payment an order_id from a successfully performed payment transaction is needed.
-
-An order_id can be received after at least the 0.10 GEL payment is successfully performed and then returned back. This order_id can be further used in a future Recurring Payments
-
-In most cases, the Payment Status will be in_progress. To receive a current status the Payment Details method should be used.
-
-note
-By default, the feature of Recurring Payments is switched off. A Bank of Georgia should be contacted to activate this feature.
-
-Parameters
-order_id
-required
+The online payment identifier.
+industry
 string
-An identifier of a successful payment performed by a given customer.
-amount
-required
+The business industry, defined during its registration.
+capture
+string
+The authorization method, always - automatic. transaction type with two possible meanings:
+
+automatic - a standard order
+manual - a pre-authorization order
+external_order_id
+string
+The payment identifier from the business system (e.g., a purchase basket identifier).
+client
 object
-A Payment Amount object.
-currency_code
-required
-GEL
-A payment currency.
-value
-required
-number
-A Payment Amount value.
-shop_order_id
+The business information.
+
+client.id
+string
+The business identifier in the bank system.
+client.brand_ka
+string
+The business Georgian name.
+client.brand_en
+string
+The business English name.
+client.url
+string
+The business web-site address.
+zoned_create_date
+string
+The order creation date in Coordinated Universal Time ( UTC). It follows the format "YYYY-MM-DDTHH:MM:SS.ssssssZ".
+zoned_expire_date
+string
+The order expiration date in Coordinated Universal Time (UTC). It follows the format "YYYY-MM-DDTHH:MM:SS.ssssssZ".
+order_status
+object
+Order status.
+
+order_status.key
+string
+The status gets the following meanings:
+
+created - payment request is created
+processing - payment is being processed
+completed - payment process has been completed
+rejected - payment process has been unsuccessfully completed
+refund_requested - refund of the amount is requested
+refunded - payment amount has been returned
+refunded_partially - payment amount has been partially refunded
+auth_requested - pre-authorize payment is requested
+blocked - pre-authorize payment has been completed successfully, but payment amount is blocked and waiting for confirmation
+partial_completed - pre-authorize payment partial amount has been confirmed successfully
+order_status.value
+string
+Description.
+buyer
+object
+The buyer information.
+
+buyer.full_name
+string
+The buyer's full name.
+buyer.email
+string
+The buyer's email.
+buyer.phone_number
+string
+The buyer's phone number.
+purchase_units
+object
+Information on the purchased products.
+
+purchase_units.request_amount
+string
+The requested amount of the order.
+purchase_units.transfer_amount
+string
+The processed amount of the order.
+purchase_units.refund_amount
+string
+The refunded amount.
+purchase_units.currency_code
+string
+Currency.
+purchase_units.items
+array
+The list of the purchased products/services.
+
+purchase_units.items[].external_item_id
+string
+The purchased product/service identifier in the business system.
+purchase_units.items[].description
+string
+The name (description) of the purchased product/service.
+purchase_units.items[].quantity
+string
+The quantity (volume) of each product/service.
+purchase_units.items[].unit_price
+string
+The purchased product/service unit price.
+purchase_units.items[].unit_discount_price
+string
+The volume of the deducted amount on the product/service unit in case of discount payment.
+purchase_units.items[].vat
+string
+The value added tax (VAT) of the purchased product/service.
+purchase_units.items[].vat_percent
+string
+The percentage of value added tax (VAT) of the purchased product/service.
+purchase_units.items[].total_price
+string
+The total price of the purchased product/service.
+purchase_units.items[].package_code
+string
+The product code of the purchased product/service.
+purchase_units.items[].tin
+string
+The taxpayer identification number (TIN).
+purchase_units.items[].pinfl
+string
+The personal identification number of an individual (PINFL).
+purchase_units.basket[].product_discount_id
 optional
 string
-A Payment identifier from an Online Shop system (i.e.: An identifier of a shopping Basket).
-REQUEST
-POST /api/v1/checkout/payment/subscription
-Content-Type: application/json
-Authorization: Bearer <jwt_token>
+Product discount identifier. If a discount promotion is registered in the bank with the provided value, taking into account the terms of the discount, the corresponding promotion will be applied to the order.
+redirect_links
+object
+The business web-pages, to which customers can be re-directed from the online payment system upon completion of the transaction.
 
-{
-  "order_id": "<order_id>",
-  "amount": {
-    "currency_code": "GEL",
-    "value": "16.45"
-  },
-  "shop_order_id": "your_shop_order_id",
-  "purchase_description": "test_product"
-}
+redirect_links.fail
+string
+The web-address in the case of transaction failure.
+redirect_links.success
+string
+The web-address in the case of transaction success.
+payment_detail
+object
+Payment details.
 
-Response
-status
-required
+payment_detail.transfer_method
 string
-A status of a Recurring Payment.
+Payment method.
 
-success - A Recurring payment is successful.
-error - A Recurring payment is unsuccessful.
-in_progress - A Recurring payment is in progress. When this status is returned, a Payment Details method should be used to retrieve a payment status.
-payment_hash
-optional
+payment_detail.transfer_method.key
 string
-A payment_hash of a Recurring payment.
-order_id
-optional
+The payment method gets the following meanings:
+card - payment by a bank card
+google_pay - payment through Google Pay
+apple_pay - payment through Apple Pay
+bog_p2p - transferring by a customer of the Bank of Georgia, internet or mobile banking
+bog_loyalty - payment by BoG MR/Plus points
+bnpl - payment in installments
+bog_loan - standard bank installment plan.
+payment_detail.transfer_method.value
 string
-An ID of a Recurring payment.
+Description.
+payment_detail.transaction_id
+string
+Transaction identifier.
+payment_detail.payer_identifier
+string
+A payer's identifier, according to the transfer_method, gets various meanings:
+
+card/google_pay – the card’s encoded number is returned (PAN)5
+apple_pay – a device-specific number assigned to your card by Apple is returned
+bog_p2p/bog_loyalty – the account name is returned
+bog_loan/bnpl – the first letter of a customer name is returned.
+payment_detail.payment_option
+string
+Payment method. The following values can be returned:
+
+direct_debit - card payment
+recurrent - payment by the saved card
+subscription - automatic payment by the saved card.
+payment_detail.card_type
+string
+The type of card used for payment. The parameter takes its value during the card payment:
+
+amex - American Express
+mc - Mastercard
+visa - Visa.
+payment_detail.card_expiry_date
+string
+Expiration date (month/year) of the card with which the payment was made. The parameter takes value at the time of card payment.
+
+payment_detail.request_account_tag
+string
+E-commerce POS identifier requested in the order.
+
+payment_detail.transfer_account_tag
+string
+E-commerce POS identifier on which the payment was processed.
+
+payment_detail.saved_card_type
+string
+Saved card type. Possible values are listed below:
+recurrent - Card saved for client initiated future payments.
+subscription - Card saved for automatic, subscription payments with fixed amount and details.
+payment_detail.parent_order_id
+string
+If payment was initiated using saved card, saved card order Id is given.
+payment_detail.code
+string
+Payment Response Code.
+payment_detail.code_description
+string
+Payment Response Code Description.
+discount
+object
+Discount details, that was applied on the payment
+
+discount.bank_discount_amount
+string
+Bank Discount Amount
+discount.bank_discount_desc
+string
+Bank Discount Description
+discount.system_discount_amount
+string
+Card system discount amount
+discount.system_discount_desc
+string
+Card system discount description
+discount.discounted_amount
+string
+Amount after discount
+discount.original_order_amount
+string
+Original amount
+actions
+array
+The list of actions associated with an order.
+
+actions[].action_id
+string
+The action identifier.
+actions[].request_channel
+string
+The channel, from which the action was initiated:
+
+public_api - online payments API
+business_manager - business manager website
+support - BOG inner system.
+actions[].action
+string
+The action type:
+
+authorize - confirmation of pre-authorize payment
+partial_authorize - confirmation of pre-authorize payment
+cancel_authorize - rejection of pre-authorize payment
+refund - refund
+partial_refund - partially refund
+actions[].status
+string
+The action status:
+
+completed - action has been completed successfully
+rejected - has been completed unsuccessfully
+actions[].zoned_action_date
+string
+The date when the action was initiated in Coordinated Universal Time (UTC). It follows the format "YYYY-MM-DDTHH:MM:SS.ssssssZ".
+actions[].amount
+string
+The amount associated with the action.
+lang
+string
+The interface language found by a customer after re-directing to the online payment page. There are two meanings:
+
+ka - Kartuli (Georgian)
+en - English
+reject_reason
+string
+The reason for payment failure. The parameter takes value only if the order failed ("order_status": "rejected"). takes the following values:
+
+expiration - the order has expired
+unknown - an unidentified reason.
+Payment Response Code Description - Payment rejection reason, initiated by card, Google Pay or Apple Pay. See full list of Response codes here.
 RESPONSE
 {
-  "status": "success",
-  "payment_hash": "<payment_hash>",
-  "order_id": "<order_id>"
-}
-
-Pre-Authorization
-This method gives a possibility to complete a deduction of an amount that was blocked during an Order method. The method is valid only if the value passed in a capture_method parameter was MANUAL when calling an Order method
-
-Parameters
-order_id
-required
-string
-An online payment identifier returned to the Online Shop in a response of the payment request method.
-
-auth_type
-required
-FULL_COMPLETE | PARTIAL_COMPLETE | CANCEL
-FULL_COMPLETE Blocked amount during order request will be fully completed.
-PARTIAL_COMPLETE will be completed part of the amount sent in amount parameter.
-amount
-optional
-string
-Is needed only in case (PARTIAL_COMPLETE). Should not be equal or more than full amount.
-
-REQUEST
-REQUEST
-POST /api/v1/checkout/payment/{order_id}/pre-auth/completion
-Content-Type: application/json
-Authorization: Bearer <jwt_token>
-
-FULL COMPLETE
-PARTIAL COMPLETE
-CANCEL
-{
-    "auth_type" : "FULL_COMPLETE",
-}
-
-Response
-status
-string
-A status of a payment pre-authorization. Can take the following value.
-
-success - A Recurrent Payment is successful.
-description
-string
-A Status description. Can have one of the following two values
-
-Pre-authorization successfully completed - A Pre-authorization is successfully completed.
-Already completed successful - A previous Pre-authorization is already verified.
-RESPONSE
-{
-  "status": "success",
-  "description": "Pre-authorization successfully completed"
+    "order_id": "a767a276-cddd-43ec-9db3-9f9b39eee02d",
+    "industry": "ecommerce",
+    "capture": "manual",
+    "external_order_id": "123456",
+    "client": {
+        "id": "10000",
+        "brand_ka": "საქართველოს ბანკი",
+        "brand_en": "BOG",
+        "url": "https://api.bog.ge"
+    },
+    "zoned_create_date": "2022-11-01T13:19:43.021178Z",
+    "zoned_expire_date": "2022-11-01T13:39:43.021178Z",
+    "order_status": {
+        "key": "refunded",
+        "value": "დაბრუნებული"
+    },
+    "buyer": {
+        "full_name": "John Doe",
+        "email": "johndoe@gmail.com",
+        "phone_number": "+995555000000"
+    },
+    "purchase_units": {
+        "request_amount": "100.5",
+        "transfer_amount": "0.0",
+        "refund_amount": "100.5",
+        "currency_code": "GEL",
+        "items": [
+            {
+                "external_item_id": "id_1",
+                "description": "product 1",
+                "quantity": "1",
+                "unit_price": "25.35",
+                "unit_discount_price": "0",
+                "vat": "0",
+                "vat_percent": "0",
+                "total_price": "25.35",
+                "package_code": "A000123",
+                "tin": null,
+                "pinfl": null,
+                "product_discount_id": "BF222R5"
+            }
+        ]
+    },
+    "redirect_links": {
+        "success": "https://payment.bog.ge/receipt?order_id=a767a276-cddd-43ec-9db3-9f9b39eee02d",
+        "fail": "https://payment.bog.ge/receipt?order_id=a767a276-cddd-43ec-9db3-9f9b39eee02d"
+    },
+    "payment_detail": {
+        "transfer_method": {
+            "key": "card",
+            "value": "ბარათით გადახდა"
+        },
+        "code": "100",
+        "code_description": "Successful payment",
+        "transaction_id": "230513868679",
+        "payer_identifier": "548888xxxxxx9893",
+        "payment_option": "direct_debit",
+        "card_type": "mc",
+        "card_expiry_date": "03/24",
+        "request_account_tag": "1212",
+        "transfer_account_tag": "gev2",
+        "saved_card_type": "recurrent",
+        "parent_order_id": "8d52130d-cb1b-45ea-b048-0f040a44e2a3"
+    },
+    "discount": {
+      "bank_discount_amount": "string",
+      "bank_discount_desc": "string", 
+      "discounted_amount": "string", 
+      "original_order_amount": "string", 
+      "system_discount_amount": "string", 
+      "system_discount_desc": "string"
+    },
+    "actions": [
+        {
+            "action_id": "b70968ca-eda9-47ae-8811-26fd1ab733f8",
+            "request_channel": "public_api",
+            "action": "authorize",
+            "status": "completed",
+            "zoned_action_date": "2022-11-28T13:42:40.668439Z",
+            "amount": "100.5"
+        },
+        {
+            "action_id": "a89b872a-9700-4025-b3fb-047cbba7a5e6",
+            "request_channel": "business_manager",
+            "action": "refund",
+            "status": "completed",
+            "zoned_action_date": "2022-11-28T13:58:03.427939Z",
+            "amount": "100.5"
+        }
+    ],
+    "lang": "ka",
+    "reject_reason": null
 }
 
 Callback
-Unlike the previous methods which are called by the Online Shop, Callback is called by an Online Payment System, while the information should be received and processed on an Online Shop side. This method gives a possibility to receive real-time information about the status change. A Callback URL is assigned to each Online Shop when the latter is registered as a Merchant in a Bank system (see the introduction). Two kinds of Callback URLs can be assigned in a Payment System to a Merchant:
+Unlike other methods, which are initiated by the business, the callback method is triggered by the payment system. The logic for receiving and processing this callback must be implemented on the business side. This method allows the business to receive real-time updates on the payment status when:
 
-After the Payment Status Change
-After the Payment Amount Return
-After that each time when the Payment Status is changed, the Payment Details are sent via POST method on a Callback URL To confirm the successful receiving of a Callback method request, a Merchant should return an HTTP CODE 200. In case of the unsuccessful result of sending via POST method of the Callback, the method is called again with 15-second intervals until the number of attempts reaches 5 or Merchant returns an HTTP CODE 200 status. In case the Callback could not be successfully called, the payment status is still successful. It is advised to use a Payment Details method to verify the payment details.
+The payment is completed successfully.
+The payment is completed unsuccessfully.
+The amount is fully or partially returned to the customer.
+Payment details are sent to the callback URL, provided when the order was requested, using the POST method. To confirm successful receipt of the callback, the business should return HTTP CODE 200. If callback was not received successfully, business must use the Get Payment Details method to verify the payment status and correctly update the order status in its system.
 
 note
-A Callback is not related to the redirection to the Online Shop Webpage from the Merchant’s payment system. A redirection happens according to a value passed by Merchant in a redirect_url parameter of an Order request method.
+Callback and Redirect URL serve distinct purposes:
 
-Payment Status Change callback
-BOG payment
-Card payment
-Pre-auth payment
-  Content-Type: application/x-www-form-urlencoded
-  Request Method: POST
+Redirect URL - Redirects the customer from the online payment page back to the business’s website after payment, enhancing the user experience. However, it does not guarantee the final payment status, as redirection may fail due to user actions or other circumstances, making it essential to verify payment completion through a server-to-server callback.
 
-  status: success | error 
-  order_id: string
-  payment_hash: string
-  ipay_payment_id: string
-  status_description: string
-  shop_order_id: string
-  payment_method: GC_CARD | BOG_CARD | BOG_LOYALTY | BOG_LOAN | UNKNOWN
-  card_type: MC | VISA | AMEX | UNKNOWN
+Callbacks - Ensure payment status confirmation and the secure delivery of payment information from the online payment system’s server to the business’s server. Unlike Redirect URLs, callbacks are independent of user actions and serve as a reliable source for verifying payment status.
+Header
+Callback-Signature
+optional
+string
+Signature generated by encrypting callback's request body with a private key using SHA256withRSA algorithm. In order to ensure integrity of callback data, business should verify signature using request body and public key. It is essential to execute this verification before the deserialization of the request body, ensuring that the order of fields remains unchanged.
 
-Payment Amount Return callback
-JSON EXAMPLE
-  order_id: string
-  payment_hash: string
-  ipay_payment_id: string
-  status_description: string
-  shop_order_id: string
-  payment_method: GC_CARD | BOG_CARD | BOG_LOYALTY
-  card_type: MC | VISA | AMEX
+PUBLIC KEY
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu4RUyAw3+CdkS3ZNILQh
+zHI9Hemo+vKB9U2BSabppkKjzjjkf+0Sm76hSMiu/HFtYhqWOESryoCDJoqffY0Q
+1VNt25aTxbj068QNUtnxQ7KQVLA+pG0smf+EBWlS1vBEAFbIas9d8c9b9sSEkTrr
+TYQ90WIM8bGB6S/KLVoT1a7SnzabjoLc5Qf/SLDG5fu8dH8zckyeYKdRKSBJKvhx
+tcBuHV4f7qsynQT+f2UYbESX/TLHwT5qFWZDHZ0YUOUIvb8n7JujVSGZO9/+ll/g
+4ZIWhC1MlJgPObDwRkRd8NFOopgxMcMsDIZIoLbWKhHVq67hdbwpAq9K9WMmEhPn
+PwIDAQAB
+-----END PUBLIC KEY-----
 
+Response
+event
+string
+Callback type. The meaning is always order_payment.
 
-  Glossary
-An Online Payment Webpage – An online payment system that allows to easily embed a payment module in any kind of Online Shop.
-Online Shop – A webpage or an application, which allows the customer to purchase an item or a service via the internet.
-Merchant – A retail trade or service company that possesses an Online Shop.
-A Merchant Primary Fields –A Company information, mandatory to be registered as a Merchant.
-A Merchant iPay Parameter –A Merchant information that should be provided to a Bank to allow a Company to perform payments on an Online Payment Webpage.
-A Card Number (PAN) – A 16-digit number displayed on the front of the plastic card.
-An Amount Blocking – A card operation that results in the reservation (making unavailable) of the portion (amount) of the card balance. After this, the Amount Blocking should - be approved (Amount Deduction) or the Amount should be Unblocked and thus become available again.
-A Pre-authorization – A two-step payment method. On a first step an amount is reserved from a customer’s account/card balance, while on a second step an operation is being completed (amount deduction)
-Callback – A request performed by the Bank System to a service published by an Online Shop to provide updated information regarding the payment.
-A System Credentials - A client_id and the secret_key provided to a Company once it has been successfully registered in the Bank system as a Merchant and has filled in all necessary data.
+zoned_request_time
+string
+Date of sending a callback in Coordinated Universal Time (UTC). It follows the format "YYYY-MM-DDTHH:MM:SS.ssssssZ".
+body
+object
+Order data. Involves the payment detail containing fields.
+
+RESPONSE
+{
+    "event": "order_payment",
+    "zoned_request_time": "2022-11-23T18:06:37.240559Z",
+    "body": {
+        "order_id": "a767a276-cddd-43ec-9db3-9f9b39eee02d",
+        "industry": "ecommerce",
+        ...
+    }
+}
