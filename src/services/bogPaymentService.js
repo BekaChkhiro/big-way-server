@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // BOG API Configuration
 const BOG_API_BASE_URL = 'https://api.bog.ge/payments/v1';
+const BOG_ECOMMERCE_URL = 'https://api.bog.ge/payments/v1/ecommerce';
 // Using real credentials
 const BOG_CLIENT_ID = process.env.BOG_CLIENT_ID || '10001626'; // Real merchant ID
 const BOG_SECRET_KEY = process.env.BOG_SECRET_KEY || 'rc7zrDXcrsXU'; // Real secret key
@@ -48,7 +49,8 @@ async function authenticate() {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': getBasicAuthHeader()
-      }
+      },
+      data: 'grant_type=client_credentials'
     });
 
     if (response.data && response.data.access_token) {
@@ -70,16 +72,14 @@ async function authenticate() {
  * @param {Object} orderData Order data
  * @param {number} amount Amount to pay
  * @param {string} description Payment description
- * @param {string} externalOrderId External order ID (transaction ID)
- * @param {string} successUrl URL to redirect after successful payment
- * @param {string} failUrl URL to redirect after failed payment
- * @param {string} callbackUrl URL for payment callback
+ * @param {string} shopOrderId Shop order ID (transaction ID)
+ * @param {string} redirectUrl URL to redirect after payment
  * @returns {Promise<Object>} Payment order details with redirect URL
  */
 async function createOrder(orderData) {
   try {
     console.log('BOG API createOrder - Starting with data:', JSON.stringify(orderData));
-    const { amount, description, externalOrderId, successUrl, failUrl, callbackUrl } = orderData;
+    const { amount, description, shopOrderId, redirectUrl } = orderData;
     
     // Get auth token
     console.log('BOG API createOrder - Getting auth token');
@@ -88,9 +88,10 @@ async function createOrder(orderData) {
     
     // Format the payment request according to BOG API
     console.log('BOG API createOrder - Formatting payment request');
+    // Adapt old parameters to new API format
     const paymentData = {
-      callback_url: callbackUrl,
-      external_order_id: externalOrderId,
+      callback_url: "https://autovend.ge/api/balance/bog-callback", // Hardcoded callback URL
+      external_order_id: shopOrderId,
       purchase_units: {
         currency: "GEL",
         total_amount: parseFloat(amount),
@@ -98,14 +99,14 @@ async function createOrder(orderData) {
           {
             quantity: 1,
             unit_price: parseFloat(amount),
-            product_id: externalOrderId,
+            product_id: shopOrderId,
             description: description || "Balance top-up"
           }
         ]
       },
       redirect_urls: {
-        success: successUrl,
-        fail: failUrl
+        success: redirectUrl,
+        fail: redirectUrl.replace('status=success', 'status=failed')
       },
       ttl: 30 // 30 minutes expiry
     };
@@ -118,7 +119,7 @@ async function createOrder(orderData) {
     
     const response = await axios({
       method: 'post',
-      url: `${BOG_API_BASE_URL}/ecommerce/orders`,
+      url: `${BOG_ECOMMERCE_URL}/orders`,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -134,9 +135,16 @@ async function createOrder(orderData) {
     console.log('BOG API Response Data:', JSON.stringify(response.data, null, 2));
     
     if (response.data && response.data._links) {
+      // Extract the payment URL from _links
+      console.log('BOG API _links:', JSON.stringify(response.data._links, null, 2));
+      
+      // The _links parameter should contain the redirect URL
+      const paymentUrl = response.data._links;
+      
       return {
         orderId: response.data.order_id,
-        paymentUrl: response.data._links,
+        paymentHash: shopOrderId, // For backward compatibility
+        paymentUrl: paymentUrl,
         status: response.data.status
       };
     } else {
@@ -159,7 +167,7 @@ async function getPaymentDetails(orderId) {
     
     const response = await axios({
       method: 'get',
-      url: `${BOG_API_BASE_URL}/ecommerce/orders/${orderId}`,
+      url: `${BOG_ECOMMERCE_URL}/orders/${orderId}`,
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept-Language': 'ka'
