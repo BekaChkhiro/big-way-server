@@ -3,9 +3,10 @@
  */
 const axios = require('axios');
 const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
 
 // BOG API Configuration
-const BOG_API_BASE_URL = 'https://ipay.ge/opay/api/v1';
+const BOG_API_BASE_URL = 'https://api.bog.ge/payments/v1';
 // Using real credentials
 const BOG_CLIENT_ID = process.env.BOG_CLIENT_ID || '10001626'; // Real merchant ID
 const BOG_SECRET_KEY = process.env.BOG_SECRET_KEY || 'rc7zrDXcrsXU'; // Real secret key
@@ -43,7 +44,7 @@ async function authenticate() {
     console.log('BOG API authenticate - Requesting new token');
     const response = await axios({
       method: 'post',
-      url: `${BOG_API_BASE_URL}/oauth2/token`,
+      url: `${BOG_API_BASE_URL}/oauth/token`,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': getBasicAuthHeader()
@@ -69,14 +70,16 @@ async function authenticate() {
  * @param {Object} orderData Order data
  * @param {number} amount Amount to pay
  * @param {string} description Payment description
- * @param {string} shopOrderId Shop order ID (transaction ID)
- * @param {string} redirectUrl URL to redirect after payment
+ * @param {string} externalOrderId External order ID (transaction ID)
+ * @param {string} successUrl URL to redirect after successful payment
+ * @param {string} failUrl URL to redirect after failed payment
+ * @param {string} callbackUrl URL for payment callback
  * @returns {Promise<Object>} Payment order details with redirect URL
  */
 async function createOrder(orderData) {
   try {
     console.log('BOG API createOrder - Starting with data:', JSON.stringify(orderData));
-    const { amount, description, shopOrderId, redirectUrl } = orderData;
+    const { amount, description, externalOrderId, successUrl, failUrl, callbackUrl } = orderData;
     
     // Get auth token
     console.log('BOG API createOrder - Getting auth token');
@@ -86,40 +89,42 @@ async function createOrder(orderData) {
     // Format the payment request according to BOG API
     console.log('BOG API createOrder - Formatting payment request');
     const paymentData = {
-      intent: "CAPTURE",
-      items: [
-        {
-          amount: amount.toString(),
-          description: description || "Balance top-up",
-          quantity: "1",
-          product_id: shopOrderId
-        }
-      ],
-      locale: "ka",
-      shop_order_id: shopOrderId,
-      redirect_url: redirectUrl,
-      show_shop_order_id_on_extract: true,
-      capture_method: "AUTOMATIC",
-      purchase_units: [
-        {
-          amount: {
-            currency_code: "GEL",
-            value: amount.toString()
+      callback_url: callbackUrl,
+      external_order_id: externalOrderId,
+      purchase_units: {
+        currency: "GEL",
+        total_amount: parseFloat(amount),
+        basket: [
+          {
+            quantity: 1,
+            unit_price: parseFloat(amount),
+            product_id: externalOrderId,
+            description: description || "Balance top-up"
           }
-        }
-      ]
+        ]
+      },
+      redirect_urls: {
+        success: successUrl,
+        fail: failUrl
+      },
+      ttl: 30 // 30 minutes expiry
     };
     
     console.log('BOG API createOrder - Sending request to BOG API');
-    console.log(`BOG API URL: ${BOG_API_BASE_URL}/checkout/orders`);
+    console.log(`BOG API URL: ${BOG_API_BASE_URL}/ecommerce/orders`);
     console.log('BOG API Request Payload:', JSON.stringify(paymentData, null, 2));
+    
+    const idempotencyKey = uuidv4();
     
     const response = await axios({
       method: 'post',
-      url: `${BOG_API_BASE_URL}/checkout/orders`,
+      url: `${BOG_API_BASE_URL}/ecommerce/orders`,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'Idempotency-Key': idempotencyKey,
+        'Accept-Language': 'ka',
+        'Theme': 'light'
       },
       data: paymentData
     });
@@ -128,17 +133,10 @@ async function createOrder(orderData) {
     console.log('BOG API Response Status:', response.status);
     console.log('BOG API Response Data:', JSON.stringify(response.data, null, 2));
     
-    if (response.data && response.data.links) {
-      // Find the approve link for redirect
-      const approveLink = response.data.links.find(link => link.rel === 'approve');
-      if (!approveLink) {
-        throw new Error('No approval URL found in BOG response');
-      }
-      
+    if (response.data && response.data._links) {
       return {
         orderId: response.data.order_id,
-        paymentHash: response.data.payment_hash,
-        paymentUrl: approveLink.href,
+        paymentUrl: response.data._links,
         status: response.data.status
       };
     } else {
@@ -161,9 +159,10 @@ async function getPaymentDetails(orderId) {
     
     const response = await axios({
       method: 'get',
-      url: `${BOG_API_BASE_URL}/checkout/payment/${orderId}`,
+      url: `${BOG_API_BASE_URL}/ecommerce/orders/${orderId}`,
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'Accept-Language': 'ka'
       }
     });
     
@@ -177,21 +176,30 @@ async function getPaymentDetails(orderId) {
 /**
  * Validate BOG callback data
  * @param {Object} callbackData Callback data from BOG
- * @param {string} expectedHash Expected payment hash
+ * @param {string} externalOrderId Expected external order ID
  * @returns {boolean} Is valid callback
  */
-function validateCallback(callbackData, expectedHash) {
+function validateCallback(callbackData, externalOrderId) {
   // Implement callback validation logic based on BOG documentation
-  if (!callbackData || !callbackData.payment_hash || !expectedHash) {
+  if (!callbackData || !callbackData.external_order_id || !externalOrderId) {
     return false;
   }
   
-  return callbackData.payment_hash === expectedHash;
+  return callbackData.external_order_id === externalOrderId;
+}
+
+/**
+ * Generate a UUID v4 for Idempotency-Key
+ * @returns {string} UUID v4
+ */
+function generateIdempotencyKey() {
+  return uuidv4();
 }
 
 module.exports = {
   authenticate,
   createOrder,
   getPaymentDetails,
-  validateCallback
+  validateCallback,
+  generateIdempotencyKey
 };
