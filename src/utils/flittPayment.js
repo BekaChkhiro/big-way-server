@@ -27,15 +27,31 @@ console.log('Flitt configuration being used:', {
  * @returns {string} - Generated signature
  */
 function generateSignature(data) {
-  // Convert merchant ID to string to ensure consistent concatenation
-  const merchantId = String(data.merchant_id);
-  
-  // Create signature string according to Flitt documentation
-  // Order is important: merchant_id + order_id + amount + currency + secret_key
-  const signatureString = merchantId + data.order_id + data.amount + data.currency + FLITT_CONFIG.secretKey;
-  
-  // Generate SHA-1 hash
-  return crypto.createHash('sha1').update(signatureString).digest('hex');
+  try {
+    // Convert merchant ID to string to ensure consistent concatenation
+    const merchantId = String(data.merchant_id);
+    
+    // Create signature string according to Flitt documentation
+    // Order is important: merchant_id + order_id + amount + currency + secret_key
+    const signatureString = merchantId + data.order_id + data.amount + data.currency + FLITT_CONFIG.secretKey;
+    
+    console.log('Generating signature with data:', {
+      merchant_id: data.merchant_id,
+      order_id: data.order_id,
+      amount: data.amount,
+      currency: data.currency,
+      // Don't log the actual signature string as it contains the secret key
+    });
+    
+    // Generate SHA-1 hash
+    const signature = crypto.createHash('sha1').update(signatureString).digest('hex');
+    console.log('Generated signature (first 6 chars):', signature.substring(0, 6) + '...');
+    
+    return signature;
+  } catch (error) {
+    console.error('Error generating signature:', error);
+    throw new Error(`Failed to generate signature: ${error.message}`);
+  }
 }
 
 /**
@@ -51,6 +67,13 @@ async function createPaymentSession(paymentData) {
   try {
     const { orderId, description, amount, redirectUrl } = paymentData;
     
+    console.log('Starting Flitt payment session creation with data:', {
+      orderId,
+      description,
+      amount,
+      redirectUrl
+    });
+    
     // Validate inputs
     if (!orderId || !description || !amount || amount <= 0) {
       throw new Error('Invalid payment data provided');
@@ -58,6 +81,7 @@ async function createPaymentSession(paymentData) {
     
     // Format amount - convert to lowest currency unit (tetri)
     const amountInTetri = Math.round(amount * 100).toString();
+    console.log(`Amount conversion: ${amount} GEL -> ${amountInTetri} tetri`);
     
     // Prepare request data according to Flitt API requirements
     const requestParams = {
@@ -67,8 +91,14 @@ async function createPaymentSession(paymentData) {
       amount: amountInTetri,
       merchant_id: parseInt(FLITT_CONFIG.merchantId, 10),
       response_url: redirectUrl,
-      server_callback_url: redirectUrl // Also use as callback URL
+      server_callback_url: redirectUrl, // Also use as callback URL
+      version: '1.0.1' // Add API version as required by Flitt
     };
+    
+    console.log('Flitt request parameters prepared:', {
+      ...requestParams,
+      merchant_id_type: typeof requestParams.merchant_id
+    });
     
     // Generate signature for the request
     const signature = generateSignature(requestParams);
@@ -79,19 +109,19 @@ async function createPaymentSession(paymentData) {
       request: requestParams
     };
     
-    console.log('Creating Flitt payment session with data:', {
-      ...requestParams,
-      signature: signature.substring(0, 6) + '...' // Only show part of the signature for security
-    });
+    console.log('Final Flitt API request body:', JSON.stringify(requestBody));
+    console.log('Sending request to Flitt API URL:', FLITT_CONFIG.apiUrl);
     
-    // Make the API request to Flitt
+    // Make the API request to Flitt with increased timeout
     const response = await axios.post(FLITT_CONFIG.apiUrl, requestBody, {
       headers: {
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 10000 // 10 seconds timeout
     });
     
-    console.log('Flitt API response:', response.data);
+    console.log('Flitt API response status:', response.status);
+    console.log('Flitt API response data:', JSON.stringify(response.data));
     
     // Check if the response was successful
     if (response.data && 
@@ -99,19 +129,37 @@ async function createPaymentSession(paymentData) {
         response.data.response.response_status === 'success' && 
         response.data.response.checkout_url) {
       
+      const checkoutUrl = response.data.response.checkout_url;
+      console.log('Successfully obtained Flitt checkout URL:', checkoutUrl);
+      
       return {
-        checkout_url: response.data.response.checkout_url,
-        redirect_url: response.data.response.checkout_url
+        checkout_url: checkoutUrl,
+        redirect_url: checkoutUrl
       };
     } else {
       // Handle error response
       const errorMessage = response.data?.response?.error_message || 'Unknown error';
       const errorCode = response.data?.response?.error_code || 'UNKNOWN';
+      console.error(`Flitt API error response: ${errorCode} - ${errorMessage}`);
+      console.error('Full error response:', JSON.stringify(response.data));
       throw new Error(`Flitt payment error (${errorCode}): ${errorMessage}`);
     }
   } catch (error) {
     console.error('Error creating Flitt payment session:', error);
     console.error('Error creating Flitt payment stack:', error.stack);
+    
+    // Check if it's an Axios error with response data
+    if (error.isAxiosError && error.response) {
+      console.error('Axios error status:', error.response.status);
+      console.error('Axios error data:', JSON.stringify(error.response.data));
+      console.error('Axios error headers:', JSON.stringify(error.response.headers));
+    }
+    
+    // Check if it's a network error
+    if (error.isAxiosError && error.code === 'ECONNREFUSED') {
+      throw new Error(`Failed to connect to Flitt API: ${error.message}`);
+    }
+    
     throw new Error(`Failed to create payment: ${error.message || JSON.stringify(error)}`);
   }
 }

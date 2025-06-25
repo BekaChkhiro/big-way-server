@@ -236,17 +236,39 @@ exports.initializeOnlinePayment = async (req, res) => {
         
       case 'flitt':
       default:
-        // Initialize payment with Flitt (default)
-        const paymentData = {
-          orderId,
-          description: `Big Way Balance Top-up (${amount} GEL)`,
-          amount, // Amount in GEL
-          redirectUrl: `${BASE_URL}/api/balance/payment-complete?orderId=${orderId}&userId=${userId}`
-        };
-        
-        // Create payment session with Flitt
-        paymentSession = await createPaymentSession(paymentData);
-        paymentUrl = paymentSession.redirect_url || paymentSession.checkout_url;
+        try {
+          console.log('Starting Flitt payment initialization...');
+          
+          // Initialize payment with Flitt (default)
+          const paymentData = {
+            orderId,
+            description: `Big Way Balance Top-up (${amount} GEL)`,
+            amount, // Amount in GEL
+            redirectUrl: `${BASE_URL}/api/balance/payment-complete?orderId=${orderId}&userId=${userId}`
+          };
+          
+          console.log('Flitt payment data prepared:', {
+            ...paymentData,
+            baseUrl: BASE_URL,
+            apiBaseUrl: apiBaseUrl
+          });
+          
+          // Create payment session with Flitt
+          paymentSession = await createPaymentSession(paymentData);
+          console.log('Flitt payment session created successfully:', paymentSession);
+          
+          paymentUrl = paymentSession.redirect_url || paymentSession.checkout_url;
+          
+          if (!paymentUrl) {
+            throw new Error('No checkout URL returned from Flitt');
+          }
+        } catch (flittError) {
+          console.error('Flitt payment initialization error:', flittError);
+          console.error('Flitt error stack:', flittError.stack);
+          
+          // Re-throw the error to be caught by the outer try-catch
+          throw new Error(`Flitt payment error: ${flittError.message}`);
+        }
         break;
     }
     
@@ -267,9 +289,21 @@ exports.initializeOnlinePayment = async (req, res) => {
     
   } catch (error) {
     console.error('Error initializing online payment:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Log additional information for debugging
+    console.error('Request details:', {
+      userId: req.user?.id,
+      amount,
+      bank: selectedBank,
+      baseUrl: BASE_URL,
+      apiBaseUrl: req.protocol + '://' + req.get('host')
+    });
+    
     return res.status(500).json({ 
       message: 'Server error while initializing payment',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'production' ? undefined : error.stack
     });
   }
 };

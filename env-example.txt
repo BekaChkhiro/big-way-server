@@ -1,0 +1,8 @@
+# Example of correct .env format
+FLITT_MERCHANT_ID=4053935
+FLITT_SECRET_KEY=TQMf4uqdWi5cYh40GlxSHvDydKeD0r2t
+FRONTEND_URL=https://big-way-client.onrender.com
+
+# Your current .env has these two lines merged:
+# FLITT_SECRET_KEY=TQMf4uqdWi5cYh40GlxSHvDydKeD0r2tFRONTEND_URL=https://big-way-client.onrender.com
+# This needs to be fixed by adding a line break between them
