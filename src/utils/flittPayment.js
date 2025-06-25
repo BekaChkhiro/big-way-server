@@ -11,6 +11,13 @@ const FLITT_CONFIG = {
   secretKey: process.env.FLITT_SECRET_KEY || 'test'      // Use test key as fallback
 };
 
+// Log the configuration being used (without exposing the actual secret key)
+console.log('Flitt configuration being used:', {
+  merchantId: FLITT_CONFIG.merchantId,
+  secretKeyProvided: !!FLITT_CONFIG.secretKey,
+  usingTestCredentials: FLITT_CONFIG.merchantId === '1549901'
+});
+
 // Initialize the Flitt checkout instance
 const checkout = new CloudIpsp({
   merchantId: FLITT_CONFIG.merchantId,
@@ -40,7 +47,7 @@ async function createPaymentSession(paymentData) {
       order_id: orderId,
       order_desc: description,
       currency: 'GEL',
-      amount: String(amount * 100), // Convert to lowest currency unit (tetri)
+      amount: Math.round(amount * 100).toString(), // Convert to lowest currency unit (tetri) and ensure it's a string
       response_url: redirectUrl
     };
     
@@ -57,6 +64,12 @@ async function createPaymentSession(paymentData) {
     // Use Flitt SDK to create checkout
     let response;
     try {
+      // Log the exact request being sent to Flitt
+      console.log('Sending request to Flitt:', {
+        ...requestData,
+        merchantId: FLITT_CONFIG.merchantId
+      });
+      
       response = await checkout.Checkout(requestData);
       console.log('Flitt payment session created:', response);
     } catch (sdkError) {
@@ -65,7 +78,8 @@ async function createPaymentSession(paymentData) {
         stack: sdkError.stack,
         response: sdkError.response ? JSON.stringify(sdkError.response.data) : 'No response data'
       });
-      throw sdkError;
+      
+      throw new Error(`Failed to create Flitt payment: ${sdkError.message}`);
     }
     
     return {
