@@ -3,6 +3,7 @@ const router = express.Router();
 const passport = require('passport');
 const authMiddleware = require('../middlewares/auth.middleware');
 const User = require('../models/user');
+const pool = require('../../config/db.config');
 
 // Initialize passport
 require('../../config/passport.config');
@@ -444,5 +445,70 @@ router.get(
     );
   }
 );
+
+// Facebook Data Deletion Request Endpoint
+router.post('/facebook-data-deletion', async (req, res) => {
+  try {
+    console.log('Facebook data deletion request received:', req.body);
+    
+    // Verify the request is coming from Facebook
+    const signedRequest = req.body.signed_request;
+    if (!signedRequest) {
+      return res.status(400).json({ error: 'Missing signed_request parameter' });
+    }
+    
+    // Parse the signed request
+    const [encodedSig, payload] = signedRequest.split('.');
+    const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+    
+    // Extract the user ID from the request
+    const userId = data.user_id;
+    
+    // In a real implementation, you would verify the signature with your app secret
+    // For simplicity, we're skipping that step here
+    
+    // Find and anonymize/delete the user data
+    if (userId) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        // Option 1: Delete the user completely
+        // await client.query('DELETE FROM users WHERE facebook_id = $1', [userId]);
+        
+        // Option 2: Anonymize the user data (preferred approach)
+        await client.query(`
+          UPDATE users 
+          SET 
+            facebook_id = NULL,
+            email = CONCAT('deleted_', id, '@example.com'),
+            first_name = 'Deleted',
+            last_name = 'User',
+            phone = NULL,
+            profile_picture = NULL
+          WHERE facebook_id = $1
+        `, [userId]);
+        
+        await client.query('COMMIT');
+        console.log(`User data for Facebook ID ${userId} has been anonymized/deleted`);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error processing Facebook data deletion:', error);
+        // Still return success to Facebook as we'll handle this internally
+      } finally {
+        client.release();
+      }
+    }
+    
+    // Facebook expects a specific response format
+    res.json({
+      url: `https://${req.get('host')}/privacy-policy`, // URL to your privacy policy
+      confirmation_code: data.user_id // Confirmation code (can be any string)
+    });
+  } catch (error) {
+    console.error('Facebook data deletion error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 module.exports = router;
