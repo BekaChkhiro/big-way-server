@@ -267,6 +267,21 @@ router.get(
   passport.authenticate('google', { scope: ['profile', 'email'] })
 );
 
+// Facebook OAuth routes
+router.get(
+  '/facebook',
+  (req, res, next) => {
+    // Check if Facebook strategy is available
+    if (!passport._strategies.facebook) {
+      return res.status(501).json({ 
+        message: 'Facebook authentication is not configured. Please set up FACEBOOK_APP_ID and FACEBOOK_APP_SECRET environment variables.' 
+      });
+    }
+    next();
+  },
+  passport.authenticate('facebook', { scope: ['email'] })
+);
+
 router.get(
   '/google/callback',
   (req, res, next) => {
@@ -340,6 +355,91 @@ router.get(
     console.error('Google authentication error:', err);
     return res.status(500).send(
       '<html><body><h1>Google Authentication Failed</h1><p>' + 
+      (err.message || 'Unknown error occurred') + '</p></body></html>'
+    );
+  }
+);
+
+// Facebook OAuth callback
+router.get(
+  '/facebook/callback',
+  (req, res, next) => {
+    console.log('Facebook OAuth callback request received, query params:', req.query);
+    // Check if Facebook strategy is available
+    if (!passport._strategies.facebook) {
+      return res.status(501).json({ 
+        message: 'Facebook authentication is not configured. Please set up FACEBOOK_APP_ID and FACEBOOK_APP_SECRET environment variables.' 
+      });
+    }
+    next();
+  },
+  passport.authenticate('facebook', { 
+    session: false, 
+    failureRedirect: '/login',
+    failWithError: true // Enable error handling
+  }),
+  (req, res) => {
+    // Success handler
+    console.log('Facebook OAuth authentication successful');
+    
+    try {
+      // User authenticated, redirect to frontend with token
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      console.log('Frontend URL:', frontendUrl);
+      
+      const lang = 'ka'; // Default language prefix used in your app
+      
+      // Debug info
+      console.log('Auth info:', req.authInfo);
+      console.log('User:', req.user);
+      
+      // Confirm authInfo exists
+      if (!req.authInfo || !req.authInfo.token || !req.authInfo.refreshToken) {
+        console.error('Missing authInfo in Facebook callback. req.authInfo:', req.authInfo);
+        return res.status(500).send(
+          '<html><body><h1>Authentication Error</h1><p>Missing authentication tokens. Please try again later.</p></body></html>'
+        );
+      }
+      
+      // Get tokens from authInfo that passport attached
+      const token = encodeURIComponent(req.authInfo.token);
+      const refreshToken = encodeURIComponent(req.authInfo.refreshToken);
+      const userData = encodeURIComponent(JSON.stringify(req.user));
+      
+      const redirectUrl = `${frontendUrl}/${lang}/auth/facebook/callback?token=${token}&refreshToken=${refreshToken}&user=${userData}`;
+      console.log('Redirecting to:', redirectUrl);
+      
+      // Try a different approach with HTML and meta refresh
+      // This sometimes works better across different hosting environments
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Redirecting...</title>
+          <meta http-equiv="refresh" content="0;url=${redirectUrl}">
+          <script>window.location.href = "${redirectUrl}";</script>
+        </head>
+        <body>
+          <h1>Authentication successful!</h1>
+          <p>Redirecting to application...</p>
+          <p>If you are not redirected, <a href="${redirectUrl}">click here</a>.</p>
+        </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error('Error in Facebook callback:', error);
+      return res.status(500).send(
+        '<html><body><h1>Authentication Error</h1><p>An unexpected error occurred. Please try again later.</p><pre>' + 
+        (process.env.NODE_ENV === 'development' ? error.stack : '') + '</pre></body></html>'
+      );
+    }
+  },
+  (err, req, res, next) => {
+    // Error handler
+    console.error('Facebook authentication error:', err);
+    return res.status(500).send(
+      '<html><body><h1>Facebook Authentication Failed</h1><p>' + 
       (err.message || 'Unknown error occurred') + '</p></body></html>'
     );
   }
