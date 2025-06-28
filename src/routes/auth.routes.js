@@ -150,6 +150,22 @@ router.put('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// Update user profile (alternative endpoint)
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    // Extract all fields except email to ensure it can't be updated
+    const { email, ...updateData } = req.body;
+    const user = await User.updateProfile(req.user.id, updateData);
+    res.json({ user, message: 'Profile updated successfully' });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    if (error.message.includes('in use')) {
+      return res.status(400).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // Change password
 router.put('/me/password', authMiddleware, async (req, res) => {
   try {
