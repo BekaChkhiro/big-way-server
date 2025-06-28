@@ -46,13 +46,20 @@ router.put('/update-profile', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: "Username, first name, and last name are required" });
     }
 
+    // Handle gender mapping - database only accepts 'male' or 'female'
+    let mappedGender = gender;
+    if (gender === 'other') {
+      // Map 'other' to a valid enum value
+      mappedGender = 'male'; // Default to 'male' when 'other' is selected
+    }
+
     // Update user profile
     const result = await pool.query(
       `UPDATE users 
        SET username = $1, phone = $2, first_name = $3, last_name = $4, age = $5, gender = $6 
        WHERE id = $7
        RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at, profile_completed`,
-      [username, phone, first_name, last_name, age, gender, userId]
+      [username, phone, first_name, last_name, age, mappedGender, userId]
     );
 
     if (result.rows.length === 0) {

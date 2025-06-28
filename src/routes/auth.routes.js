@@ -155,6 +155,13 @@ router.put('/profile', authMiddleware, async (req, res) => {
   try {
     // Extract all fields except email to ensure it can't be updated
     const { email, ...updateData } = req.body;
+    
+    // Handle gender mapping - database only accepts 'male' or 'female'
+    if (updateData.gender && updateData.gender === 'other') {
+      // Map 'other' to a valid enum value
+      updateData.gender = 'male'; // Default to 'male' when 'other' is selected
+    }
+    
     const user = await User.updateProfile(req.user.id, updateData);
     res.json({ user, message: 'Profile updated successfully' });
   } catch (error) {
