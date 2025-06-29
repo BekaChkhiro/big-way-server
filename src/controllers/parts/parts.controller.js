@@ -220,12 +220,12 @@ class PartsController {
           
           // Format the image URLs for the database
           processedImages = awsUploadResults.map((result, index) => {
-            // Each result has urls for different sizes
+            // Each result contains the URLs directly
             return {
-              image_url: result.urls.original,
-              thumbnail_url: result.urls.thumbnail,
-              medium_url: result.urls.medium,
-              large_url: result.urls.large,
+              image_url: result.original,
+              thumbnail_url: result.thumbnail,
+              medium_url: result.medium,
+              large_url: result.large,
               is_primary: false // New images are not primary by default
             };
           });
