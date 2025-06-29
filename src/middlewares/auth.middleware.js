@@ -19,6 +19,8 @@ const authMiddleware = (req, res, next) => {
       const decoded = verifyToken(token);
       console.log('Auth middleware: Token verified successfully', { userId: decoded.id, role: decoded.role });
       req.user = decoded;
+      // Make sure userId is always set for compatibility with both routes
+      req.userId = decoded.id;
       next();
     } catch (tokenError) {
       console.error('Auth middleware: Token verification failed', tokenError);

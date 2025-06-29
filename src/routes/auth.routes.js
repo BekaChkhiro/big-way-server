@@ -156,13 +156,29 @@ router.put('/profile', authMiddleware, async (req, res) => {
     // Extract all fields except email to ensure it can't be updated
     const { email, ...updateData } = req.body;
     
+    // Make sure we have a valid user ID
+    const userId = req.userId || req.user.id;
+    if (!userId) {
+      console.error('Missing user ID in request');
+      return res.status(401).json({ message: 'Authentication error: Missing user ID' });
+    }
+    
+    console.log('Updating profile via /api/auth/profile endpoint for user ID:', userId);
+    
     // Handle gender mapping - database only accepts 'male' or 'female'
     if (updateData.gender && updateData.gender === 'other') {
       // Map 'other' to a valid enum value
       updateData.gender = 'male'; // Default to 'male' when 'other' is selected
     }
     
-    const user = await User.updateProfile(req.user.id, updateData);
+    const user = await User.updateProfile(userId, updateData);
+    
+    if (!user) {
+      console.error(`User not found with ID: ${userId}`);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    console.log(`Successfully updated profile for user ID: ${userId}`);
     res.json({ user, message: 'Profile updated successfully' });
   } catch (error) {
     console.error('Profile update error:', error);

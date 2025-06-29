@@ -53,17 +53,27 @@ router.put('/update-profile', authMiddleware, async (req, res) => {
       mappedGender = 'male'; // Default to 'male' when 'other' is selected
     }
 
+    // Log the user ID to help with debugging
+    console.log('Updating profile for user ID:', userId);
+    
     // Update user profile
     const result = await pool.query(
       `UPDATE users 
        SET username = $1, phone = $2, first_name = $3, last_name = $4, age = $5, gender = $6 
        WHERE id = $7
-       RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at, profile_completed`,
+       RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at, profile_completed, google_id`,
       [username, phone, first_name, last_name, age, mappedGender, userId]
     );
 
     if (result.rows.length === 0) {
+      console.error(`User not found with ID: ${userId}`);
       return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Log successful update
+    console.log(`Successfully updated profile for user ID: ${userId}, username: ${username}`);
+    if (result.rows[0].google_id) {
+      console.log('This is a Google-authenticated user with google_id:', result.rows[0].google_id);
     }
 
     // Return updated user data
