@@ -141,6 +141,8 @@ class CarModel {
         c.*,
         b.name as brand,
         cat.name as category,
+        c.author_name,
+        c.author_phone,
         json_build_object(
           'id', s.id,
           'mileage', s.mileage,

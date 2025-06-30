@@ -120,7 +120,7 @@ class CarSearch {
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
       ${whereClause}
-      GROUP BY c.id, s.id, l.id, b.name, cat.name
+      GROUP BY c.id, c.author_name, c.author_phone, s.id, l.id, b.name, cat.name
       ORDER BY c.${sortColumn} ${sortOrder}
       LIMIT $1 OFFSET $2
     `;
@@ -328,7 +328,7 @@ class CarSearch {
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
       WHERE ${conditions.join(' AND ')}
-      GROUP BY c.id, s.id, l.id, b.name, cat.name
+      GROUP BY c.id, c.author_name, c.author_phone, s.id, l.id, b.name, cat.name
       ORDER BY 
         CASE WHEN $${paramCounter + 2} = 'DESC' THEN
           CASE $${paramCounter + 1}
@@ -435,7 +435,7 @@ class CarSearch {
             AND c.year BETWEEN $5 - 2 AND $5 + 2
           )
         )
-      GROUP BY c.id, s.id, l.id, b.name, cat.name
+      GROUP BY c.id, c.author_name, c.author_phone, s.id, l.id, b.name, cat.name
       ORDER BY
         CASE 
           WHEN c.brand_id = $2 AND c.category_id = $3 THEN 1
