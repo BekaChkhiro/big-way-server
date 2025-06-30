@@ -527,6 +527,191 @@ class CarCreate {
     }
   }
 
+  // Update a car by ID
+  async update(carId, updateData, userId = null) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check if the car exists
+      const carCheckQuery = 'SELECT * FROM cars WHERE id = $1';
+      const carCheckResult = await client.query(carCheckQuery, [carId]);
+      
+      if (carCheckResult.rows.length === 0) {
+        throw new Error('Car not found');
+      }
+
+      const car = carCheckResult.rows[0];
+      
+      // If userId is provided, check if the user is the owner of the car
+      // This is for regular users. For admin users, this check is bypassed.
+      if (userId && car.seller_id !== userId) {
+        // Get the user to check if they are an admin
+        const userQuery = 'SELECT role FROM users WHERE id = $1';
+        const userResult = await client.query(userQuery, [userId]);
+        
+        if (userResult.rows.length === 0) {
+          throw new Error('User not found');
+        }
+        
+        const userRole = userResult.rows[0].role;
+        
+        // If user is not an admin and not the owner, throw error
+        if (userRole !== 'admin' && car.seller_id !== userId) {
+          throw new Error('Unauthorized: You can only update your own car listings');
+        }
+      }
+
+      // Get existing specification and location data
+      const specAndLocationQuery = 'SELECT specification_id, location_id FROM cars WHERE id = $1';
+      const specAndLocationResult = await client.query(specAndLocationQuery, [carId]);
+      
+      if (specAndLocationResult.rows.length === 0) {
+        throw new Error('Car data incomplete');
+      }
+      
+      const { specification_id, location_id } = specAndLocationResult.rows[0];
+      
+      // Update specifications if provided
+      if (updateData.specifications) {
+        // Get current specifications
+        const currentSpecQuery = 'SELECT * FROM specifications WHERE id = $1';
+        const currentSpecResult = await client.query(currentSpecQuery, [specification_id]);
+        
+        if (currentSpecResult.rows.length > 0) {
+          const currentSpecs = currentSpecResult.rows[0];
+          
+          // Merge existing specs with update data
+          const updatedSpecs = {
+            ...currentSpecs,
+            ...updateData.specifications
+          };
+          
+          // Remove id from the update object
+          delete updatedSpecs.id;
+          
+          // Build the update query dynamically
+          const specColumns = Object.keys(updatedSpecs).filter(key => key !== 'id');
+          const specValues = specColumns.map(column => updatedSpecs[column]);
+          const specPlaceholders = specColumns.map((_, index) => `$${index + 2}`).join(', ');
+          const specSet = specColumns.map((column, index) => `${column} = $${index + 2}`).join(', ');
+          
+          const updateSpecQuery = `UPDATE specifications SET ${specSet} WHERE id = $1`;
+          await client.query(updateSpecQuery, [specification_id, ...specValues]);
+        }
+      }
+      
+      // Update location if provided
+      if (updateData.location) {
+        // Get current location
+        const currentLocQuery = 'SELECT * FROM locations WHERE id = $1';
+        const currentLocResult = await client.query(currentLocQuery, [location_id]);
+        
+        if (currentLocResult.rows.length > 0) {
+          const currentLocation = currentLocResult.rows[0];
+          
+          // Merge existing location with update data
+          const updatedLocation = {
+            ...currentLocation,
+            ...updateData.location
+          };
+          
+          // Remove id from the update object
+          delete updatedLocation.id;
+          
+          // Build the update query dynamically
+          const locColumns = Object.keys(updatedLocation).filter(key => key !== 'id');
+          const locValues = locColumns.map(column => updatedLocation[column]);
+          const locPlaceholders = locColumns.map((_, index) => `$${index + 2}`).join(', ');
+          const locSet = locColumns.map((column, index) => `${column} = $${index + 2}`).join(', ');
+          
+          const updateLocQuery = `UPDATE locations SET ${locSet} WHERE id = $1`;
+          await client.query(updateLocQuery, [location_id, ...locValues]);
+        }
+      }
+      
+      // Update car data
+      const updateFields = [];
+      const updateValues = [];
+      let valueIndex = 1;
+      
+      // Add all updated fields except specifications and location which are handled separately
+      Object.entries(updateData).forEach(([key, value]) => {
+        if (key !== 'specifications' && key !== 'location' && key !== 'images') {
+          updateFields.push(`${key} = $${valueIndex++}`);
+          updateValues.push(value);
+        }
+      });
+      
+      if (updateFields.length > 0) {
+        const updateCarQuery = `UPDATE cars SET ${updateFields.join(', ')} WHERE id = $${valueIndex}`;
+        await client.query(updateCarQuery, [...updateValues, carId]);
+      }
+      
+      await client.query('COMMIT');
+      
+      // Fetch and return the updated car data
+      const updatedCarQuery = `
+        SELECT c.*, 
+               l.city, l.country, l.location_type,
+               s.*
+        FROM cars c
+        LEFT JOIN locations l ON c.location_id = l.id
+        LEFT JOIN specifications s ON c.specification_id = s.id
+        WHERE c.id = $1
+      `;
+      const updatedCarResult = await client.query(updatedCarQuery, [carId]);
+      
+      if (updatedCarResult.rows.length > 0) {
+        const updatedCar = updatedCarResult.rows[0];
+        
+        // Format the response
+        return {
+          id: updatedCar.id,
+          brand_id: updatedCar.brand_id,
+          category_id: updatedCar.category_id,
+          model: updatedCar.model,
+          title: updatedCar.title,
+          year: updatedCar.year,
+          price: updatedCar.price,
+          currency: updatedCar.currency,
+          description_ka: updatedCar.description_ka,
+          description_en: updatedCar.description_en,
+          description_ru: updatedCar.description_ru,
+          status: updatedCar.status,
+          author_name: updatedCar.author_name,
+          author_phone: updatedCar.author_phone,
+          location: {
+            city: updatedCar.city,
+            country: updatedCar.country,
+            location_type: updatedCar.location_type
+          },
+          specifications: {
+            transmission: updatedCar.transmission,
+            fuel_type: updatedCar.fuel_type,
+            engine_size: updatedCar.engine_size,
+            mileage: updatedCar.mileage,
+            mileage_unit: updatedCar.mileage_unit,
+            steering_wheel: updatedCar.steering_wheel,
+            drive_type: updatedCar.drive_type,
+            color: updatedCar.color,
+            interior_color: updatedCar.interior_color,
+            interior_material: updatedCar.interior_material,
+            doors: updatedCar.doors
+          }
+        };
+      }
+      
+      throw new Error('Failed to retrieve updated car data');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error updating car:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // Delete a car by ID
   async delete(carId, userId = null) {
     const client = await pool.connect();
