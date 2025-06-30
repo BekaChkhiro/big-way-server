@@ -821,7 +821,9 @@ router.get('/:id', async (req, res) => {
         b.name as brand,
         cat.name as category,
         l.city, l.country,
-        s.*
+        s.*,
+        c.author_name, 
+        c.author_phone
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -859,6 +861,8 @@ router.get('/:id', async (req, res) => {
       description_en: car.description_en,
       description_ru: car.description_ru,
       status: car.status,
+      author_name: car.author_name,
+      author_phone: car.author_phone,
       featured: car.featured,
       seller_id: car.seller_id,
       created_at: car.created_at,
