@@ -414,12 +414,13 @@ class CarCreate {
         ]
       );
 
-      // Create car
+      // Create car with author information
       const carResult = await client.query(
         `INSERT INTO cars 
         (brand_id, category_id, location_id, specification_id, model, title, year, price, 
-        description_ka, description_en, description_ru, status, featured, seller_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        description_ka, description_en, description_ru, status, featured, seller_id,
+        author_name, author_phone)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         RETURNING id`,
         [
           carData.brand_id,
@@ -435,7 +436,9 @@ class CarCreate {
           carData.description_ru,
           'available',
           false,
-          sellerId
+          sellerId,
+          carData.author_name || '',   // Include author name
+          carData.author_phone || ''    // Include author phone
         ]
       );
 
@@ -511,6 +514,8 @@ class CarCreate {
         status: 'available',
         featured: false,
         seller_id: sellerId,
+        author_name: carData.author_name || '',
+        author_phone: carData.author_phone || '',
         images: carImages
       };
     } catch (error) {
