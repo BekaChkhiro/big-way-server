@@ -601,6 +601,7 @@ router.get('/', async (req, res) => {
         cat.name as category_name,
         u.id as seller_id,
         loc.city, loc.country,
+        c.author_name, c.author_phone,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
         spec.engine_size, spec.steering_wheel, spec.cylinders, spec.airbags_count,
         spec.drive_type, spec.interior_material, spec.interior_color, spec.color
@@ -636,6 +637,8 @@ router.get('/', async (req, res) => {
         year: car.year,
         price: car.price,
         seller_id: car.seller_id,
+        author_name: car.author_name,
+        author_phone: car.author_phone,
         description_ka: car.description_ka,
         description_en: car.description_en,
         description_ru: car.description_ru,
