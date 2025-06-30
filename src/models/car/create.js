@@ -592,61 +592,188 @@ class CarCreate {
       
       // Update specifications if provided
       if (updateData.specifications) {
-        // Get current specifications
-        const currentSpecQuery = 'SELECT * FROM specifications WHERE id = $1';
-        const currentSpecResult = await client.query(currentSpecQuery, [specification_id]);
-        
-        if (currentSpecResult.rows.length > 0) {
-          const currentSpecs = currentSpecResult.rows[0];
+        try {
+          console.log('[CarCreate.update] Updating specifications...');
           
-          // Merge existing specs with update data
-          const updatedSpecs = {
-            ...currentSpecs,
-            ...updateData.specifications
-          };
+          // Parse specifications from JSON if it's a string
+          let specificationsData = updateData.specifications;
+          if (typeof specificationsData === 'string') {
+            try {
+              specificationsData = JSON.parse(specificationsData);
+              console.log('[CarCreate.update] Parsed specifications JSON:', specificationsData);
+            } catch (jsonError) {
+              console.error('[CarCreate.update] Error parsing specifications JSON:', jsonError);
+            }
+          }
           
-          // Remove id from the update object
-          delete updatedSpecs.id;
+          // Check if specifications exist for this car
+          const checkSpecResult = await client.query('SELECT id FROM specifications WHERE car_id = $1', [carId]);
           
-          // Build the update query dynamically
-          const specColumns = Object.keys(updatedSpecs).filter(key => key !== 'id');
-          const specValues = specColumns.map(column => updatedSpecs[column]);
-          const specPlaceholders = specColumns.map((_, index) => `$${index + 2}`).join(', ');
-          const specSet = specColumns.map((column, index) => `${column} = $${index + 2}`).join(', ');
-          
-          const updateSpecQuery = `UPDATE specifications SET ${specSet} WHERE id = $1`;
-          console.log('[CarCreate.update] SQL Query for updating specifications:', updateSpecQuery);
-          console.log('[CarCreate.update] Values for updating specifications:', [specification_id, ...specValues]);
-          await client.query(updateSpecQuery, [specification_id, ...specValues]);
+          if (checkSpecResult.rows.length > 0) {
+            // Get the specifications ID
+            const specId = checkSpecResult.rows[0].id;
+            console.log(`[CarCreate.update] Found existing specifications with ID: ${specId}`);
+            
+            // FixedQuery approach for specifications
+            const updateSpecQuery = `
+              UPDATE specifications SET 
+                transmission = $2,
+                fuel_type = $3,
+                body_type = $4,
+                drive_type = $5,
+                steering_wheel = $6,
+                engine_size = $7,
+                mileage = $8,
+                mileage_unit = $9,
+                color = $10,
+                cylinders = $11,
+                interior_material = $12,
+                interior_color = $13,
+                airbags_count = $14,
+                engine_type = $15
+              WHERE id = $1
+            `;
+            
+            // მომზადებული პარამეტრები
+            const specParams = [
+              specId,
+              specificationsData.transmission || null,
+              specificationsData.fuel_type || null,
+              specificationsData.body_type || null,
+              specificationsData.drive_type || null,
+              specificationsData.steering_wheel || null,
+              specificationsData.engine_size || null,
+              specificationsData.mileage ? parseInt(specificationsData.mileage) : null,
+              specificationsData.mileage_unit || null,
+              specificationsData.color || null,
+              specificationsData.cylinders ? parseInt(specificationsData.cylinders) : null,
+              specificationsData.interior_material || null,
+              specificationsData.interior_color || null,
+              specificationsData.airbags_count ? parseInt(specificationsData.airbags_count) : null,
+              specificationsData.engine_type || null
+            ];
+            
+            console.log('[CarCreate.update] Using fixed field update for specifications');
+            console.log('[CarCreate.update] SQL Query for updating specifications:', updateSpecQuery.trim());
+            console.log('[CarCreate.update] Values for updating specifications:', specParams);
+            
+            await client.query(updateSpecQuery, specParams);
+            console.log('[CarCreate.update] Specifications updated successfully');
+          } else {
+            console.log('[CarCreate.update] No existing specifications found for this car, creating new ones...');
+            // Create new specifications with fixed fields
+            const createSpecQuery = `
+              INSERT INTO specifications (
+                car_id, transmission, fuel_type, body_type, drive_type, 
+                steering_wheel, engine_size, mileage, mileage_unit, 
+                color, cylinders, interior_material, interior_color, 
+                airbags_count, engine_type
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+              RETURNING id
+            `;
+            
+            // მომზადებული პარამეტრები
+            const specParams = [
+              carId,
+              specificationsData.transmission || null,
+              specificationsData.fuel_type || null,
+              specificationsData.body_type || null,
+              specificationsData.drive_type || null,
+              specificationsData.steering_wheel || null,
+              specificationsData.engine_size || null,
+              specificationsData.mileage ? parseInt(specificationsData.mileage) : null,
+              specificationsData.mileage_unit || null,
+              specificationsData.color || null,
+              specificationsData.cylinders ? parseInt(specificationsData.cylinders) : null,
+              specificationsData.interior_material || null,
+              specificationsData.interior_color || null,
+              specificationsData.airbags_count ? parseInt(specificationsData.airbags_count) : null,
+              specificationsData.engine_type || null
+            ];
+            
+            await client.query(createSpecQuery, specParams);
+            console.log('[CarCreate.update] Created new specifications for the car');
+          }
+        } catch (error) {
+          console.error('[CarCreate.update] Error updating specifications:', error);
+          throw error;
         }
       }
       
       // Update location if provided
       if (updateData.location) {
-        // Get current location
-        const currentLocQuery = 'SELECT * FROM locations WHERE id = $1';
-        const currentLocResult = await client.query(currentLocQuery, [location_id]);
-        
-        if (currentLocResult.rows.length > 0) {
-          const currentLocation = currentLocResult.rows[0];
+        try {
+          console.log('[CarCreate.update] Updating location...');
           
-          // Merge existing location with update data
-          const updatedLocation = {
-            ...currentLocation,
-            ...updateData.location
-          };
+          // Parse location from JSON if it's a string
+          let locationData = updateData.location;
+          if (typeof locationData === 'string') {
+            try {
+              locationData = JSON.parse(locationData);
+              console.log('[CarCreate.update] Parsed location JSON:', locationData);
+            } catch (jsonError) {
+              console.error('[CarCreate.update] Error parsing location JSON:', jsonError);
+            }
+          }
           
-          // Remove id from the update object
-          delete updatedLocation.id;
+          // Check if location exists for this car
+          const checkLocResult = await client.query('SELECT id FROM locations WHERE car_id = $1', [carId]);
           
-          // Build the update query dynamically
-          const locColumns = Object.keys(updatedLocation).filter(key => key !== 'id');
-          const locValues = locColumns.map(column => updatedLocation[column]);
-          const locPlaceholders = locColumns.map((_, index) => `$${index + 2}`).join(', ');
-          const locSet = locColumns.map((column, index) => `${column} = $${index + 2}`).join(', ');
-          
-          const updateLocQuery = `UPDATE locations SET ${locSet} WHERE id = $1`;
-          await client.query(updateLocQuery, [location_id, ...locValues]);
+          if (checkLocResult.rows.length > 0) {
+            // Get the location ID
+            const locId = checkLocResult.rows[0].id;
+            console.log(`[CarCreate.update] Found existing location with ID: ${locId}`);
+            
+            // FixedQuery approach for locations
+            const updateLocQuery = `
+              UPDATE locations SET 
+                city = $2,
+                country = $3,
+                location_type = $4,
+                is_transit = $5
+              WHERE id = $1
+            `;
+            
+            // მომზადებული პარამეტრები
+            const locParams = [
+              locId,
+              locationData.city || null,
+              locationData.country || null,
+              locationData.location_type || null,
+              locationData.is_transit || false
+            ];
+            
+            console.log('[CarCreate.update] Using fixed field update for location');
+            console.log('[CarCreate.update] SQL Query for updating location:', updateLocQuery.trim());
+            console.log('[CarCreate.update] Values for updating location:', locParams);
+            
+            await client.query(updateLocQuery, locParams);
+            console.log('[CarCreate.update] Location updated successfully');
+          } else {
+            console.log('[CarCreate.update] No existing location found for this car, creating new one...');
+            // Create new location with fixed fields
+            const createLocQuery = `
+              INSERT INTO locations (
+                car_id, city, country, location_type, is_transit
+              ) VALUES ($1, $2, $3, $4, $5) 
+              RETURNING id
+            `;
+            
+            // მომზადებული პარამეტრები
+            const locParams = [
+              carId,
+              locationData.city || null,
+              locationData.country || null,
+              locationData.location_type || null,
+              locationData.is_transit || false
+            ];
+            
+            await client.query(createLocQuery, locParams);
+            console.log('[CarCreate.update] Created new location for the car');
+          }
+        } catch (error) {
+          console.error('[CarCreate.update] Error updating location:', error);
+          throw error;
         }
       }
       
