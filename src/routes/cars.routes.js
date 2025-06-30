@@ -557,8 +557,11 @@ router.get('/', async (req, res) => {
       addFilter('LOWER(loc.city)', location.toLowerCase(), 'LIKE');
     }
     
+    // Always include the status = 'available' condition
+    conditions.push(`c.status = 'available'`);
+    
     // Build the WHERE clause
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
     
     // Validate sortBy to prevent SQL injection
     const validSortColumns = [
