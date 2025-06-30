@@ -615,6 +615,8 @@ class CarCreate {
           const specSet = specColumns.map((column, index) => `${column} = $${index + 2}`).join(', ');
           
           const updateSpecQuery = `UPDATE specifications SET ${specSet} WHERE id = $1`;
+          console.log('[CarCreate.update] SQL Query for updating specifications:', updateSpecQuery);
+          console.log('[CarCreate.update] Values for updating specifications:', [specification_id, ...specValues]);
           await client.query(updateSpecQuery, [specification_id, ...specValues]);
         }
       }
@@ -648,45 +650,65 @@ class CarCreate {
         }
       }
       
-      // Update car data
-      const updateFields = [];
-      const updateValues = [];
-      let valueIndex = 1;
-      
-      console.log('[CarCreate.update] Processing fields for update:');
-      
-      // ექსპლიციტურად ვამატებთ author_name და author_phone ველებს, თუ ისინი მოცემულია
-      if (updateData.author_name !== undefined) {
-        console.log(`[CarCreate.update] Explicitly adding author_name = ${updateData.author_name}`);
-        updateFields.push(`author_name = $${valueIndex++}`);
-        updateValues.push(updateData.author_name);
-      }
-      
-      if (updateData.author_phone !== undefined) {
-        console.log(`[CarCreate.update] Explicitly adding author_phone = ${updateData.author_phone}`);
-        updateFields.push(`author_phone = $${valueIndex++}`);
-        updateValues.push(updateData.author_phone);
-      }
-      
-      // Add all other updated fields except specifications and location which are handled separately
-      Object.entries(updateData).forEach(([key, value]) => {
-        if (key !== 'specifications' && key !== 'location' && key !== 'images' && 
-            key !== 'author_name' && key !== 'author_phone' && key !== 'id') { // გამოვტოვოთ 'id' ველიც
-          console.log(`[CarCreate.update] Adding field for update: ${key} = ${value}`);
-          updateFields.push(`${key} = $${valueIndex++}`);
-          updateValues.push(value);
-        }
-      });
-      
-      console.log('[CarCreate.update] Fields to update:', updateFields);
-      console.log('[CarCreate.update] Values to update:', updateValues);
-      
-      if (updateFields.length > 0) {
-        const updateCarQuery = `UPDATE cars SET ${updateFields.join(', ')} WHERE id = $${valueIndex}`;
-        console.log('[CarCreate.update] SQL Query:', updateCarQuery);
-        console.log('[CarCreate.update] SQL Values:', [...updateValues, carId]);
-        await client.query(updateCarQuery, [...updateValues, carId]);
-        console.log('[CarCreate.update] Car update query executed successfully');
+      // Update car data - მივიღოთ უფრო კონტროლირებადი მიდგომა დინამიური ველების ნაცვლად
+      console.log('[CarCreate.update] Processing car update with fixed fields approach');
+
+      try {
+        // განვსაზღვროთ ველები პირდაპირ, განსაკუთრებით ყურადღება მივაქციოთ ტიპებს
+        // შევზღუდოთ განახლებადი ველების რაოდენობა და უზრუნველვყოთ მათი ტიპების სისწორე
+        const brand_id = updateData.brand_id ? parseInt(updateData.brand_id) : null;
+        const category_id = updateData.category_id ? parseInt(updateData.category_id) : null;
+        const year = updateData.year ? parseInt(updateData.year) : null;
+        const price = updateData.price ? parseFloat(updateData.price) : null;
+
+        // მოვამზადოთ განახლების მოთხოვნა ფიქსირებული ველებით
+        const updateCarQuery = `
+          UPDATE cars SET 
+            author_name = $1, 
+            author_phone = $2, 
+            brand_id = $3, 
+            model = $4, 
+            title = $5,
+            category_id = $6,
+            year = $7,
+            price = $8,
+            currency = $9,
+            description_ka = $10, 
+            description_en = $11, 
+            description_ru = $12
+          WHERE id = $13
+        `;
+
+        // მოვამზადოთ მნიშვნელობების მასივი სწორი ტიპებით
+        const updateParams = [
+          updateData.author_name || null,
+          updateData.author_phone || null,
+          brand_id,
+          updateData.model || null,
+          updateData.title || null,
+          category_id,
+          year,
+          price,
+          updateData.currency || null,
+          updateData.description_ka || null,
+          updateData.description_en || null,
+          updateData.description_ru || null,
+          parseInt(carId)
+        ];
+
+        // დებაგისთვის დავბეჭდოთ პარამეტრები
+        console.log('[CarCreate.update] Fixed SQL query:', updateCarQuery.trim());
+        console.log('[CarCreate.update] Parameters with types:');
+        updateParams.forEach((param, idx) => {
+          console.log(`$${idx + 1}: ${param} (${typeof param}), SQL type: ${param === null ? 'NULL' : typeof param === 'number' ? param % 1 === 0 ? 'INTEGER' : 'FLOAT' : 'TEXT'}`);
+        });
+
+        // შევასრულოთ მოთხოვნა
+        await client.query(updateCarQuery, updateParams);
+        console.log('[CarCreate.update] Car update query executed successfully with fixed fields approach');
+      } catch (error) {
+        console.error('[CarCreate.update] SQL Error during fixed field update:', error);
+        throw error;
       }
       
       await client.query('COMMIT');
