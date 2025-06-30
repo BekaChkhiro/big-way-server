@@ -388,7 +388,7 @@ router.post('/:id/images', authMiddleware, carUpload.array('images'), async (req
 });
 
 // Update car listing (requires authentication)
-router.put('/:id', authMiddleware, async (req, res) => {
+router.put('/:id', authMiddleware, carUpload.array('images', 10), async (req, res) => {
   try {
     const { id } = req.params;
     
