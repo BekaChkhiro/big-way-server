@@ -391,6 +391,17 @@ router.post('/:id/images', authMiddleware, carUpload.array('images'), async (req
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // დებაგის ინფორმაცია
+    console.log('მანქანის განახლების მოთხოვნა:');
+    console.log('მანქანის ID:', id);
+    console.log('მომხმარებლის ID:', req.user.id);
+    console.log('მოთხოვნის სხეული:', JSON.stringify(req.body, null, 2));
+    console.log('ავტორის ინფორმაცია:', {
+      author_name: req.body.author_name,
+      author_phone: req.body.author_phone
+    });
+    
     const car = await CarCreate.update(parseInt(id), req.body, req.user.id);
     res.status(200).json({
       success: true,

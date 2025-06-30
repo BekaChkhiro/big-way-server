@@ -533,9 +533,17 @@ class CarCreate {
     try {
       await client.query('BEGIN');
 
+      // Debug incoming update data
+      console.log('[CarCreate.update] Incoming update data:', JSON.stringify(updateData, null, 2));
+      console.log('[CarCreate.update] Author info in update data:', { 
+        author_name: updateData.author_name, 
+        author_phone: updateData.author_phone 
+      });
+
       // Check if the car exists
       const carCheckQuery = 'SELECT * FROM cars WHERE id = $1';
       const carCheckResult = await client.query(carCheckQuery, [carId]);
+      console.log('[CarCreate.update] Car found:', carCheckResult.rows.length > 0);
       
       if (carCheckResult.rows.length === 0) {
         throw new Error('Car not found');
@@ -635,17 +643,40 @@ class CarCreate {
       const updateValues = [];
       let valueIndex = 1;
       
-      // Add all updated fields except specifications and location which are handled separately
+      console.log('[CarCreate.update] Processing fields for update:');
+      
+      // ექსპლიციტურად ვამატებთ author_name და author_phone ველებს, თუ ისინი მოცემულია
+      if (updateData.author_name !== undefined) {
+        console.log(`[CarCreate.update] Explicitly adding author_name = ${updateData.author_name}`);
+        updateFields.push(`author_name = $${valueIndex++}`);
+        updateValues.push(updateData.author_name);
+      }
+      
+      if (updateData.author_phone !== undefined) {
+        console.log(`[CarCreate.update] Explicitly adding author_phone = ${updateData.author_phone}`);
+        updateFields.push(`author_phone = $${valueIndex++}`);
+        updateValues.push(updateData.author_phone);
+      }
+      
+      // Add all other updated fields except specifications and location which are handled separately
       Object.entries(updateData).forEach(([key, value]) => {
-        if (key !== 'specifications' && key !== 'location' && key !== 'images') {
+        if (key !== 'specifications' && key !== 'location' && key !== 'images' && 
+            key !== 'author_name' && key !== 'author_phone') {
+          console.log(`[CarCreate.update] Adding field for update: ${key} = ${value}`);
           updateFields.push(`${key} = $${valueIndex++}`);
           updateValues.push(value);
         }
       });
       
+      console.log('[CarCreate.update] Fields to update:', updateFields);
+      console.log('[CarCreate.update] Values to update:', updateValues);
+      
       if (updateFields.length > 0) {
         const updateCarQuery = `UPDATE cars SET ${updateFields.join(', ')} WHERE id = $${valueIndex}`;
+        console.log('[CarCreate.update] SQL Query:', updateCarQuery);
+        console.log('[CarCreate.update] SQL Values:', [...updateValues, carId]);
         await client.query(updateCarQuery, [...updateValues, carId]);
+        console.log('[CarCreate.update] Car update query executed successfully');
       }
       
       await client.query('COMMIT');
