@@ -533,8 +533,18 @@ class CarCreate {
     try {
       await client.query('BEGIN');
 
-      // Debug incoming update data
-      console.log('[CarCreate.update] Incoming update data:', JSON.stringify(updateData, null, 2));
+      // DEBUG: დავამუშაოთ ველები, რომლებიც შეიძლება მასივების სახით მოვიდეს
+      // მულტიპარტ ფორმის დამუშავების შედეგად
+      Object.keys(updateData).forEach(key => {
+        if (Array.isArray(updateData[key])) {
+          console.log(`[CarCreate.update] Converting array to single value for ${key}:`, updateData[key]);
+          // ავიღოთ მასივის პირველი ელემენტი
+          updateData[key] = updateData[key][0];
+        }
+      });
+
+      // Debug cleaned update data
+      console.log('[CarCreate.update] Cleaned update data:', JSON.stringify(updateData, null, 2));
       console.log('[CarCreate.update] Author info in update data:', { 
         author_name: updateData.author_name, 
         author_phone: updateData.author_phone 
@@ -661,7 +671,7 @@ class CarCreate {
       // Add all other updated fields except specifications and location which are handled separately
       Object.entries(updateData).forEach(([key, value]) => {
         if (key !== 'specifications' && key !== 'location' && key !== 'images' && 
-            key !== 'author_name' && key !== 'author_phone') {
+            key !== 'author_name' && key !== 'author_phone' && key !== 'id') { // გამოვტოვოთ 'id' ველიც
           console.log(`[CarCreate.update] Adding field for update: ${key} = ${value}`);
           updateFields.push(`${key} = $${valueIndex++}`);
           updateValues.push(value);
