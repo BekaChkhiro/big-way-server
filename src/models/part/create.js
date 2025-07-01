@@ -152,7 +152,7 @@ class PartCreate {
         ) as images
       FROM parts p
       LEFT JOIN brands b ON p.brand_id = b.id
-      LEFT JOIN categories cat ON p.category_id = cat.id
+      LEFT JOIN part_categories cat ON p.category_id = cat.id
       LEFT JOIN car_models cm ON p.model_id = cm.id
       WHERE p.id = $1
       GROUP BY p.id, b.name, cat.name, cm.name
