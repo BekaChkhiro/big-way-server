@@ -77,9 +77,9 @@ class PartCreate {
   async handleImageUploads(client, images, partId, processedImages) {
     // If we already have processed images, just save them to DB
     if (processedImages.length > 0) {
-      const promises = processedImages.map((image, index) => {
-        const isPrimary = index === 0; // First image is primary
-        return this.saveImageToDatabase(client, partId, image, isPrimary);
+      const promises = processedImages.map((image) => {
+        // Use the is_primary flag that was set in the controller
+        return this.saveImageToDatabase(client, partId, image, image.is_primary);
       });
       await Promise.all(promises);
       return;
