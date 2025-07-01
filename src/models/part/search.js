@@ -12,7 +12,7 @@ class PartSearch {
         SELECT 
           p.*,
           b.name as brand,
-          cat.name as category,
+          pc.name as category,
           cm.name as model,
           COALESCE(
             (SELECT json_agg(
@@ -30,7 +30,7 @@ class PartSearch {
           ) as images
         FROM parts p
         LEFT JOIN brands b ON p.brand_id = b.id
-        LEFT JOIN categories cat ON p.category_id = cat.id
+        LEFT JOIN part_categories pc ON p.category_id = pc.id
         LEFT JOIN car_models cm ON p.model_id = cm.id
       `;
 
@@ -113,7 +113,7 @@ class PartSearch {
         }
       }
       
-      query += ` GROUP BY p.id, b.name, cat.name, cm.name ORDER BY ${orderBy}`;
+      query += ` GROUP BY p.id, b.name, pc.name, cm.name ORDER BY ${orderBy}`;
 
       // Add pagination
       const page = filters.page || 1;

@@ -9,7 +9,7 @@ class PartModel {
       SELECT 
         p.*,
         b.name as brand,
-        cat.name as category,
+        pc.name as category,
         cm.name as model,
         COALESCE(
           (SELECT json_agg(
@@ -27,11 +27,12 @@ class PartModel {
         ) as images
       FROM parts p
       LEFT JOIN brands b ON p.brand_id = b.id
-      LEFT JOIN categories cat ON p.category_id = cat.id
+      LEFT JOIN part_categories pc ON p.category_id = pc.id
       LEFT JOIN car_models cm ON p.model_id = cm.id
       WHERE p.id = $1
-      GROUP BY p.id, b.name, cat.name, cm.name
+      GROUP BY p.id, b.name, pc.name, cm.name
     `;
+    console.log('Finding part by ID:', id);
     const result = await pool.query(query, [id]);
     return result.rows[0];
   }
@@ -65,7 +66,7 @@ class PartModel {
       SELECT 
         p.*,
         b.name as brand,
-        cat.name as category,
+        pc.name as category,
         cm.name as model,
         COALESCE(
           (SELECT json_agg(
@@ -83,7 +84,7 @@ class PartModel {
         ) as images
       FROM parts p
       LEFT JOIN brands b ON p.brand_id = b.id
-      LEFT JOIN categories cat ON p.category_id = cat.id
+      LEFT JOIN part_categories pc ON p.category_id = pc.id
       LEFT JOIN car_models cm ON p.model_id = cm.id
       ORDER BY p.created_at DESC
       LIMIT $1

@@ -8,11 +8,12 @@ class PartValidation {
       throw new Error(`Brand with ID ${brandId} not found`);
     }
 
-    // Check if category exists
-    const categoryResult = await client.query('SELECT * FROM categories WHERE id = $1', [categoryId]);
+    // Check if category exists in part_categories table
+    const categoryResult = await client.query('SELECT * FROM part_categories WHERE id = $1', [categoryId]);
     if (categoryResult.rows.length === 0) {
-      throw new Error(`Category with ID ${categoryId} not found`);
+      throw new Error(`Part category with ID ${categoryId} not found`);
     }
+    console.log('Category check result:', categoryResult.rows);
   }
 
   static async validateModel(client, brandId, modelId) {
