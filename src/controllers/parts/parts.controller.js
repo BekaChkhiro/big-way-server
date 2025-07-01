@@ -63,8 +63,8 @@ class PartsController {
       console.log('After conversion - brand_id:', partData.brand_id, 'type:', typeof partData.brand_id);
       console.log('After conversion - model_id:', partData.model_id, 'type:', typeof partData.model_id);
       
-      // Verify category exists
-      const categoryCheck = await pool.query('SELECT * FROM categories WHERE id = $1', [partData.category_id]);
+      // Verify category exists in part_categories table
+      const categoryCheck = await pool.query('SELECT * FROM part_categories WHERE id = $1', [partData.category_id]);
       console.log('Category check result:', categoryCheck.rows);
       
       const images = req.files;
