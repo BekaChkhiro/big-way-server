@@ -24,11 +24,22 @@ class PartsController {
   // Create a new part
   async create(req, res) {
     try {
+      console.log('============= STARTING PART CREATION =============');
       const uploadMiddleware = promisify(upload.array('images', 10));
       await uploadMiddleware(req, res);
 
-      console.log('Request body:', req.body);
+      console.log('Request body keys:', Object.keys(req.body));
       console.log('Raw partData from request:', req.body.partData);
+      console.log('Files received:', req.files ? req.files.length : 0);
+      
+      if (req.files && req.files.length > 0) {
+        console.log('Files details:');
+        req.files.forEach((file, index) => {
+          console.log(`File ${index}: ${file.originalname}, mimetype: ${file.mimetype}, size: ${file.size} bytes`);
+        });
+      } else {
+        console.log('No files received in the request');
+      }
       
       let partData;
       try {
@@ -40,13 +51,21 @@ class PartsController {
         throw new Error(`Failed to parse part data: ${err.message}`);
       }
       
-      console.log('Parsed partData:', partData);
+      console.log('Parsed partData:', JSON.stringify(partData, null, 2));
       
       // Ensure all numeric fields are actually numbers
       if (partData.category_id) partData.category_id = Number(partData.category_id);
       if (partData.brand_id) partData.brand_id = Number(partData.brand_id);
       if (partData.model_id) partData.model_id = Number(partData.model_id);
       if (partData.price) partData.price = Number(partData.price);
+      
+      console.log('After conversion - category_id:', partData.category_id, 'type:', typeof partData.category_id);
+      console.log('After conversion - brand_id:', partData.brand_id, 'type:', typeof partData.brand_id);
+      console.log('After conversion - model_id:', partData.model_id, 'type:', typeof partData.model_id);
+      
+      // Verify category exists
+      const categoryCheck = await pool.query('SELECT * FROM categories WHERE id = $1', [partData.category_id]);
+      console.log('Category check result:', categoryCheck.rows);
       
       const images = req.files;
       console.log(`Number of images received: ${images ? images.length : 0}`);
@@ -63,35 +82,56 @@ class PartsController {
           console.log('Uploading images to AWS S3...');
           // Use the upload middleware's processAndUpload function to handle AWS S3 uploads
           const awsUploadResults = await processAndUpload(images);
-          console.log('AWS upload results:', awsUploadResults);
+          console.log('AWS upload results:', JSON.stringify(awsUploadResults, null, 2));
           
           // Format the image URLs for the database
           processedImages = awsUploadResults.map((result, index) => {
+            // Parse featuredImageIndex as a number to ensure correct comparison
+            const featuredIndex = parseInt(partData.featuredImageIndex, 10);
+            // Check if featuredImageIndex is specified and use it to determine primary image
+            const isPrimary = !isNaN(featuredIndex) ? 
+              index === featuredIndex : 
+              index === 0; // Default to first image if not specified
+              
+            console.log(`Image ${index} isPrimary: ${isPrimary}, featuredIndex: ${featuredIndex}`);
+            
             // Each result directly contains the URLs at the top level
             return {
               image_url: result.original,
               thumbnail_url: result.thumbnail,
               medium_url: result.medium,
               large_url: result.large,
-              is_primary: index === 0 // First image is primary
+              is_primary: isPrimary
             };
           });
           
-          console.log('Processed image URLs:', processedImages);
+          console.log('Processed image URLs:', JSON.stringify(processedImages, null, 2));
         } catch (uploadError) {
           console.error('Error uploading images to AWS S3:', uploadError);
           throw new Error(`Failed to upload images: ${uploadError.message}`);
         }
       }
       
+      // Ensure featuredImageIndex is properly passed to the part creation
+      if (partData.featuredImageIndex !== undefined) {
+        // Make sure it's a number
+        partData.featuredImageIndex = parseInt(partData.featuredImageIndex, 10);
+        console.log('Using featuredImageIndex:', partData.featuredImageIndex);
+      } else {
+        console.log('No featuredImageIndex provided, defaulting to 0');
+        partData.featuredImageIndex = 0;
+      }
+      
       // Create the part with AWS S3 image URLs
-      console.log('Creating part with processed images:', processedImages);
+      console.log('Creating part with processed images:', processedImages.length);
       const part = await PartCreate.create(partData, [], sellerId, processedImages);
+      console.log('Part created successfully:', part.id);
 
       res.status(201).json({
         success: true,
         part
       });
+      console.log('============= PART CREATION COMPLETE =============');
     } catch (error) {
       console.error('Error creating part:', error);
       // Use req.body.partData instead of undefined partData

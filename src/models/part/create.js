@@ -11,6 +11,19 @@ class PartCreate {
 
       console.log('Creating part with data:', JSON.stringify(partData, null, 2));
 
+      // Ensure numeric fields are actually numbers
+      partData.category_id = parseInt(partData.category_id, 10);
+      partData.brand_id = parseInt(partData.brand_id, 10);
+      partData.model_id = parseInt(partData.model_id, 10);
+      partData.price = parseFloat(partData.price);
+      
+      console.log('Part data after conversion:', {
+        category_id: partData.category_id, 
+        brand_id: partData.brand_id, 
+        model_id: partData.model_id,
+        price: partData.price
+      });
+      
       // Validate all part data first
       PartValidation.validatePartData(partData);
 
