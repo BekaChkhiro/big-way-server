@@ -29,8 +29,17 @@ const processAndUpload = async (files) => {
   });
 
   if (!files || files.length === 0) {
+    console.error('No files provided to processAndUpload');
     throw new Error('No files provided');
   }
+
+  // Validate files array contains valid objects
+  files.forEach((file, index) => {
+    if (!file.buffer || !file.originalname || !file.mimetype) {
+      console.error(`Invalid file at index ${index}:`, file);
+      throw new Error(`Invalid file at index ${index}: missing required properties`);
+    }
+  });
 
   const processedImages = [];
 

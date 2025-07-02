@@ -59,9 +59,12 @@ class PartCreate {
       const partResult = await client.query(insertPartQuery, partValues);
       const part = partResult.rows[0];
 
-      // Handle image uploads
-      if (images && images.length > 0) {
-        await this.handleImageUploads(client, images, part.id, processedImages);
+      // Upload and process images
+      if (processedImages && processedImages.length > 0) {
+        console.log(`Saving ${processedImages.length} processed images to database for part ${part.id}`);
+        await this.handleImageUploads(client, [], part.id, processedImages);
+      } else {
+        console.log('No images to save for part', part.id);
       }
 
       await client.query('COMMIT');
@@ -111,6 +114,20 @@ class PartCreate {
   }
 
   async saveImageToDatabase(client, partId, image, isPrimary) {
+    console.log(`Saving image for part ${partId}, isPrimary: ${isPrimary}`);
+    console.log('Image data:', JSON.stringify(image));
+    
+    // If this is a primary image, first reset all other images to non-primary
+    if (isPrimary) {
+      const resetPrimaryQuery = `
+        UPDATE part_images 
+        SET is_primary = false 
+        WHERE part_id = $1
+      `;
+      await client.query(resetPrimaryQuery, [partId]);
+      console.log(`Reset primary status for all images of part ${partId}`);
+    }
+    
     const insertImageQuery = `
       INSERT INTO part_images(part_id, image_url, thumbnail_url, medium_url, large_url, is_primary)
       VALUES($1, $2, $3, $4, $5, $6)
@@ -126,6 +143,7 @@ class PartCreate {
       isPrimary
     ]);
     
+    console.log(`Image saved successfully for part ${partId}, id: ${imageResult.rows[0].id}`);
     return imageResult.rows[0];
   }
 
@@ -136,6 +154,9 @@ class PartCreate {
         b.name as brand,
         cat.name as category,
         cm.name as model,
+        u.first_name,
+        u.last_name,
+        u.phone,
         COALESCE(
           (SELECT json_agg(
             json_build_object(
@@ -154,8 +175,9 @@ class PartCreate {
       LEFT JOIN brands b ON p.brand_id = b.id
       LEFT JOIN part_categories cat ON p.category_id = cat.id
       LEFT JOIN car_models cm ON p.model_id = cm.id
+      LEFT JOIN users u ON p.seller_id = u.id
       WHERE p.id = $1
-      GROUP BY p.id, b.name, cat.name, cm.name
+      GROUP BY p.id, b.name, cat.name, cm.name, u.first_name, u.last_name, u.phone
     `;
     
     const result = await pool.query(query, [partId]);

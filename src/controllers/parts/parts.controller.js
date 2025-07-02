@@ -80,8 +80,10 @@ class PartsController {
       if (images && images.length > 0) {
         try {
           console.log('Uploading images to AWS S3...');
+          console.log('Images to process:', images.length);
           // Use the upload middleware's processAndUpload function to handle AWS S3 uploads
           const awsUploadResults = await processAndUpload(images);
+          console.log('AWS upload results count:', awsUploadResults.length);
           console.log('AWS upload results:', JSON.stringify(awsUploadResults, null, 2));
           
           // Format the image URLs for the database
@@ -95,6 +97,11 @@ class PartsController {
               
             console.log(`Image ${index} isPrimary: ${isPrimary}, featuredIndex: ${featuredIndex}`);
             
+            if (!result.original || !result.thumbnail || !result.medium || !result.large) {
+              console.error(`Missing image URLs for image ${index}:`, result);
+              throw new Error(`Failed to process image ${index}: Missing URL`);  
+            }
+            
             // Each result directly contains the URLs at the top level
             return {
               image_url: result.original,
@@ -105,7 +112,12 @@ class PartsController {
             };
           });
           
+          console.log('Processed image count:', processedImages.length);
           console.log('Processed image URLs:', JSON.stringify(processedImages, null, 2));
+          
+          if (processedImages.length === 0) {
+            throw new Error('No images were successfully processed');
+          }
         } catch (uploadError) {
           console.error('Error uploading images to AWS S3:', uploadError);
           throw new Error(`Failed to upload images: ${uploadError.message}`);
@@ -120,6 +132,12 @@ class PartsController {
       } else {
         console.log('No featuredImageIndex provided, defaulting to 0');
         partData.featuredImageIndex = 0;
+      }
+      
+      // Double-check that we have processed images
+      if (processedImages.length === 0 && images && images.length > 0) {
+        console.error('No processed images but we had files. This is a critical error.');
+        throw new Error('Failed to process images. Please try again.');
       }
       
       // Create the part with AWS S3 image URLs
