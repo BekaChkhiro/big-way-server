@@ -11,6 +11,11 @@ class PartModel {
         b.name as brand,
         pc.name as category,
         cm.name as model,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.created_at as user_created_at,
         COALESCE(
           (SELECT json_agg(
             json_build_object(
@@ -29,8 +34,9 @@ class PartModel {
       LEFT JOIN brands b ON p.brand_id = b.id
       LEFT JOIN part_categories pc ON p.category_id = pc.id
       LEFT JOIN car_models cm ON p.model_id = cm.id
+      LEFT JOIN users u ON p.seller_id = u.id
       WHERE p.id = $1
-      GROUP BY p.id, b.name, pc.name, cm.name
+      GROUP BY p.id, b.name, pc.name, cm.name, u.username, u.first_name, u.last_name, u.phone, u.created_at
     `;
     console.log('Finding part by ID:', id);
     const result = await pool.query(query, [id]);

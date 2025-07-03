@@ -48,10 +48,15 @@ router.put('/update-profile', authMiddleware, async (req, res) => {
 
     // Handle gender mapping - database only accepts 'male' or 'female'
     let mappedGender = gender;
-    if (gender === 'other') {
-      // Map 'other' to a valid enum value
-      mappedGender = 'male'; // Default to 'male' when 'other' is selected
+    
+    // Make sure gender is one of the valid values
+    if (!mappedGender || (mappedGender !== 'male' && mappedGender !== 'female')) {
+      // Default to 'male' when gender is 'other' or invalid
+      mappedGender = 'male';
     }
+    
+    // Log the gender being saved
+    console.log('Saving gender value to database:', mappedGender);
 
     // Log the user ID to help with debugging
     console.log('Updating profile for user ID:', userId);
