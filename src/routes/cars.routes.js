@@ -327,6 +327,8 @@ router.post('/', authMiddleware, carUpload.array('images', 10), async (req, res)
     });
   } catch (error) {
     console.error('Error creating car:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     if (error.message.includes('validation')) {
       return res.status(400).json({ 
         success: false,
@@ -660,6 +662,8 @@ router.get('/', async (req, res) => {
         featured: car.featured,
         created_at: car.created_at,
         updated_at: car.updated_at,
+        category_id: car.category_id, // დავამატეთ category_id ველი
+        category_name: car.category_name, // დავამატეთ category_name ველი
         // Create a properly nested specifications object
         specifications: {
           engine_type: car.engine_type,
@@ -759,6 +763,8 @@ router.get('/user', authMiddleware, async (req, res) => {
         vip_expiration_date: car.vip_expiration_date,
         created_at: car.created_at,
         updated_at: car.updated_at,
+        category_id: car.category_id, // დავამატეთ category_id ველი
+        category_name: car.category_name, // დავამატეთ category_name ველი
         // Create a properly nested specifications object
         specifications: {
           engine_type: car.engine_type,
@@ -861,6 +867,32 @@ router.get('/:id', async (req, res) => {
     const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
     const imagesResult = await pool.query(imagesQuery, [carId]);
     
+    // დებაგ ლოგები
+    console.log('Car details from database:', car);
+    console.log('Category ID from database:', car.category_id);
+    console.log('Category name from database:', car.category);
+    
+    // Debug logs for specification values
+    console.log('Feature flags from database:');
+    console.log('has_board_computer:', car.has_board_computer);
+    console.log('has_air_conditioning:', car.has_air_conditioning);
+    console.log('has_parking_control:', car.has_parking_control);
+    console.log('has_rear_view_camera:', car.has_rear_view_camera);
+    console.log('has_electric_windows:', car.has_electric_windows);
+    console.log('has_climate_control:', car.has_climate_control);
+    console.log('has_cruise_control:', car.has_cruise_control);
+    console.log('has_start_stop:', car.has_start_stop);
+    console.log('has_sunroof:', car.has_sunroof);
+    console.log('has_seat_heating:', car.has_seat_heating);
+    console.log('has_abs:', car.has_abs);
+    console.log('has_traction_control:', car.has_traction_control);
+    console.log('has_central_locking:', car.has_central_locking);
+    console.log('has_alarm:', car.has_alarm);
+    console.log('has_fog_lights:', car.has_fog_lights);
+    console.log('has_navigation:', car.has_navigation);
+    console.log('has_bluetooth:', car.has_bluetooth);
+    console.log('has_multifunction_steering_wheel:', car.has_multifunction_steering_wheel);
+    
     // Format the car data with nested objects
     const formattedCar = {
       id: car.id,
@@ -881,6 +913,7 @@ router.get('/:id', async (req, res) => {
       seller_id: car.seller_id,
       created_at: car.created_at,
       updated_at: car.updated_at,
+      category_name: car.category, // დავამატეთ category_name ველი, რომელიც იყენებს car.category ღირებულებას
       // Create a properly nested specifications object
       specifications: {
         id: car.id,
@@ -891,44 +924,46 @@ router.get('/:id', async (req, res) => {
         mileage_unit: car.mileage_unit || 'km',
         engine_size: car.engine_size,
         horsepower: car.horsepower,
-        is_turbo: car.is_turbo || false,
+        is_turbo: Boolean(car.is_turbo),
         cylinders: car.cylinders,
         manufacture_month: car.manufacture_month,
         color: car.color,
         body_type: car.body_type,
         steering_wheel: car.steering_wheel,
         drive_type: car.drive_type,
-        has_catalyst: car.has_catalyst || false,
+        has_catalyst: Boolean(car.has_catalyst),
         airbags_count: car.airbags_count,
         interior_material: car.interior_material,
         interior_color: car.interior_color,
         doors: car.doors,
-        has_hydraulics: car.has_hydraulics || false,
-        has_board_computer: car.has_board_computer || false,
-        has_air_conditioning: car.has_air_conditioning || false,
-        has_parking_control: car.has_parking_control || false,
-        has_rear_view_camera: car.has_rear_view_camera || false,
-        has_electric_windows: car.has_electric_windows || false,
-        has_climate_control: car.has_climate_control || false,
-        has_cruise_control: car.has_cruise_control || false,
-        has_start_stop: car.has_start_stop || false,
-        has_sunroof: car.has_sunroof || false,
-        has_seat_heating: car.has_seat_heating || false,
-        has_seat_memory: car.has_seat_memory || false,
-        has_abs: car.has_abs || false,
-        has_traction_control: car.has_traction_control || false,
-        has_central_locking: car.has_central_locking || false,
-        has_alarm: car.has_alarm || false,
-        has_fog_lights: car.has_fog_lights || false,
-        has_navigation: car.has_navigation || false,
-        has_aux: car.has_aux || false,
-        has_bluetooth: car.has_bluetooth || false,
-        has_multifunction_steering_wheel: car.has_multifunction_steering_wheel || false,
-        has_alloy_wheels: car.has_alloy_wheels || false,
-        has_spare_tire: car.has_spare_tire || false,
-        is_disability_adapted: car.is_disability_adapted || false,
-        is_cleared: car.is_cleared || false,
-        has_technical_inspection: car.has_technical_inspection || false,
+        has_hydraulics: Boolean(car.has_hydraulics),
+        has_board_computer: Boolean(car.has_board_computer),
+        has_air_conditioning: Boolean(car.has_air_conditioning),
+        has_parking_control: Boolean(car.has_parking_control),
+        has_rear_view_camera: Boolean(car.has_rear_view_camera),
+        has_electric_windows: Boolean(car.has_electric_windows),
+        has_climate_control: Boolean(car.has_climate_control),
+        has_cruise_control: Boolean(car.has_cruise_control),
+        has_start_stop: Boolean(car.has_start_stop),
+        has_sunroof: Boolean(car.has_sunroof),
+        has_seat_heating: Boolean(car.has_seat_heating),
+        has_seat_memory: Boolean(car.has_seat_memory),
+        has_abs: Boolean(car.has_abs),
+        has_traction_control: Boolean(car.has_traction_control),
+        has_central_locking: Boolean(car.has_central_locking),
+        has_alarm: Boolean(car.has_alarm),
+        has_fog_lights: Boolean(car.has_fog_lights),
+        has_navigation: Boolean(car.has_navigation),
+        has_aux: Boolean(car.has_aux),
+        has_bluetooth: Boolean(car.has_bluetooth),
+        has_multifunction_steering_wheel: Boolean(car.has_multifunction_steering_wheel),
+        has_alloy_wheels: Boolean(car.has_alloy_wheels),
+        has_spare_tire: Boolean(car.has_spare_tire),
+        is_disability_adapted: Boolean(car.is_disability_adapted),
+        is_cleared: Boolean(car.is_cleared),
+        has_technical_inspection: Boolean(car.has_technical_inspection),
+        // Include legacy fields for compatibility with frontend
+        has_leather_interior: car.interior_material === 'ტყავი' ? true : false,
         clearance_status: car.clearance_status || 'not_cleared'
       },
       // Create a properly nested location object

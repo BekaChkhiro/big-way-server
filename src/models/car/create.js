@@ -4,6 +4,71 @@ const path = require('path');
 const fs = require('fs').promises;
 
 class CarCreate {
+  // Helper function to normalize interior material to a valid value
+  normalizeInteriorMaterial(interiorMaterial) {
+    if (!interiorMaterial) {
+      return 'ნაჭერი'; // Default if not provided
+    }
+    
+    const normalizedValue = interiorMaterial.trim();
+    const validInteriorMaterials = [
+      'ნაჭერი', 'ტყავი', 'ხელოვნური ტყავი', 'კომბინირებული', 'ალკანტარა'
+    ];
+    
+    if (validInteriorMaterials.includes(normalizedValue)) {
+      return normalizedValue;
+    } else {
+      // Map English terms to Georgian equivalents
+      if (normalizedValue.toLowerCase() === 'leather') {
+        return 'ტყავი';
+      } else if (normalizedValue.toLowerCase() === 'cloth' || normalizedValue.toLowerCase() === 'fabric') {
+        return 'ნაჭერი';
+      } else if (normalizedValue.toLowerCase() === 'alcantara') {
+        return 'ალკანტარა';
+      } else if (normalizedValue.toLowerCase().includes('artificial') || normalizedValue.toLowerCase().includes('synthetic')) {
+        return 'ხელოვნური ტყავი';
+      } else if (normalizedValue.toLowerCase().includes('combined') || normalizedValue.toLowerCase().includes('mix')) {
+        return 'კომბინირებული';
+      }
+      
+      return 'ნაჭერი'; // Default if invalid
+    }
+  }
+  
+  // Helper function to adjust engine size to a valid value
+  adjustEngineSize(engineSize) {
+    if (engineSize === undefined || engineSize === null) {
+      return 1.6; // Default value
+    }
+    
+    // Parse to float if it's a string
+    const size = parseFloat(engineSize);
+    
+    // Check if it's a valid number
+    if (isNaN(size)) {
+      return 1.6; // Default if invalid
+    }
+    
+    // Valid values are from 0.05 to 13.0 with 0.1 increments
+    const validValues = [];
+    for (let i = 0.05; i <= 13.0; i += 0.1) {
+      validValues.push(parseFloat(i.toFixed(2)));
+    }
+    
+    // Find the closest valid value
+    let closestValue = validValues[0];
+    let minDiff = Math.abs(size - closestValue);
+    
+    for (let i = 1; i < validValues.length; i++) {
+      const diff = Math.abs(size - validValues[i]);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestValue = validValues[i];
+      }
+    }
+    
+    return closestValue;
+  }
   async create(carData, images, sellerId, processedImages = []) {
     const client = await pool.connect();
     try {
@@ -28,13 +93,89 @@ class CarCreate {
         airbags_count: Number((carData.specifications?.airbags_count) || carData.airbags_count || 0),
         interior_material: (carData.specifications?.interior_material) || carData.interior_material || 'leather',
         interior_color: (carData.specifications?.interior_color) || carData.interior_color || 'black',
-        has_board_computer: Boolean((carData.specifications?.has_board_computer !== undefined ? carData.specifications.has_board_computer : carData.has_board_computer) ?? false),
-        has_alarm: Boolean((carData.specifications?.has_alarm !== undefined ? carData.specifications.has_alarm : carData.has_alarm) ?? false),
         doors: (carData.specifications?.doors) || carData.doors || 4,
-        // manufacture_month ველი არ არსებობს მონაცემთა ბაზაში, ამიტომ ამოვიღეთ
         clearance_status: (carData.specifications?.clearance_status) || carData.clearance_status
-        // Add other boolean flags similarly, ensuring they default to false if not provided
       };
+      
+      // Process feature flags from either specifications object or features array
+      console.log('Processing features from client data:', carData.features);
+      
+      // Handle features that come as an array of strings
+      if (Array.isArray(carData.features)) {
+        specifications.has_board_computer = carData.features.includes('board_computer');
+        specifications.has_alarm = carData.features.includes('alarm');
+        specifications.has_air_conditioning = carData.features.includes('air_conditioning');
+        specifications.has_parking_control = carData.features.includes('parking_control');
+        specifications.has_rear_view_camera = carData.features.includes('rear_view_camera');
+        specifications.has_electric_windows = carData.features.includes('electric_windows');
+        specifications.has_climate_control = carData.features.includes('climate_control');
+        specifications.has_cruise_control = carData.features.includes('cruise_control');
+        specifications.has_start_stop = carData.features.includes('start_stop');
+        specifications.has_sunroof = carData.features.includes('sunroof');
+        specifications.has_seat_heating = carData.features.includes('seat_heating') || carData.features.includes('heated_seats');
+        specifications.has_abs = carData.features.includes('abs');
+        specifications.has_traction_control = carData.features.includes('traction_control');
+        specifications.has_central_locking = carData.features.includes('central_locking');
+        specifications.has_fog_lights = carData.features.includes('fog_lights');
+        specifications.has_navigation = carData.features.includes('navigation');
+        specifications.has_bluetooth = carData.features.includes('bluetooth');
+        specifications.has_multifunction_steering_wheel = carData.features.includes('multifunction_steering_wheel');
+        specifications.has_technical_inspection = carData.features.includes('technical_inspection');
+      }
+      // Handle features that come as an object with boolean values
+      else if (carData.features && typeof carData.features === 'object') {
+        specifications.has_board_computer = Boolean(carData.features.has_board_computer);
+        specifications.has_alarm = Boolean(carData.features.has_alarm);
+        specifications.has_air_conditioning = Boolean(carData.features.has_air_conditioning);
+        specifications.has_parking_control = Boolean(carData.features.has_parking_control);
+        specifications.has_rear_view_camera = Boolean(carData.features.has_rear_view_camera);
+        specifications.has_electric_windows = Boolean(carData.features.has_electric_windows);
+        specifications.has_climate_control = Boolean(carData.features.has_climate_control);
+        specifications.has_cruise_control = Boolean(carData.features.has_cruise_control);
+        specifications.has_start_stop = Boolean(carData.features.has_start_stop);
+        specifications.has_sunroof = Boolean(carData.features.has_sunroof);
+        specifications.has_seat_heating = Boolean(carData.features.has_seat_heating || carData.features.has_heated_seats);
+        specifications.has_abs = Boolean(carData.features.has_abs);
+        specifications.has_traction_control = Boolean(carData.features.has_traction_control);
+        specifications.has_central_locking = Boolean(carData.features.has_central_locking);
+        specifications.has_fog_lights = Boolean(carData.features.has_fog_lights);
+        specifications.has_navigation = Boolean(carData.features.has_navigation);
+        specifications.has_bluetooth = Boolean(carData.features.has_bluetooth);
+        specifications.has_multifunction_steering_wheel = Boolean(carData.features.has_multifunction_steering_wheel);
+        specifications.has_technical_inspection = Boolean(carData.features.has_technical_inspection);
+      }
+      // Fall back to specifications object if features array/object isn't provided
+      else {
+        specifications.has_board_computer = Boolean(carData.specifications?.has_board_computer || carData.has_board_computer);
+        specifications.has_alarm = Boolean(carData.specifications?.has_alarm || carData.has_alarm);
+        specifications.has_air_conditioning = Boolean(carData.specifications?.has_air_conditioning || carData.has_air_conditioning);
+        specifications.has_parking_control = Boolean(carData.specifications?.has_parking_control || carData.has_parking_control);
+        specifications.has_rear_view_camera = Boolean(carData.specifications?.has_rear_view_camera || carData.has_rear_view_camera);
+        specifications.has_electric_windows = Boolean(carData.specifications?.has_electric_windows || carData.has_electric_windows);
+        specifications.has_climate_control = Boolean(carData.specifications?.has_climate_control || carData.has_climate_control);
+        specifications.has_cruise_control = Boolean(carData.specifications?.has_cruise_control || carData.has_cruise_control);
+        specifications.has_start_stop = Boolean(carData.specifications?.has_start_stop || carData.has_start_stop);
+        specifications.has_sunroof = Boolean(carData.specifications?.has_sunroof || carData.has_sunroof);
+        specifications.has_seat_heating = Boolean(carData.specifications?.has_seat_heating || carData.has_seat_heating);
+        specifications.has_abs = Boolean(carData.specifications?.has_abs || carData.has_abs);
+        specifications.has_traction_control = Boolean(carData.specifications?.has_traction_control || carData.has_traction_control);
+        specifications.has_central_locking = Boolean(carData.specifications?.has_central_locking || carData.has_central_locking);
+        specifications.has_fog_lights = Boolean(carData.specifications?.has_fog_lights || carData.has_fog_lights);
+        specifications.has_navigation = Boolean(carData.specifications?.has_navigation || carData.has_navigation);
+        specifications.has_bluetooth = Boolean(carData.specifications?.has_bluetooth || carData.has_bluetooth);
+        specifications.has_multifunction_steering_wheel = Boolean(carData.specifications?.has_multifunction_steering_wheel || carData.has_multifunction_steering_wheel);
+        specifications.has_technical_inspection = Boolean(carData.specifications?.has_technical_inspection || carData.has_technical_inspection);
+      }
+      
+      console.log('Final processed feature flags:', {
+        has_board_computer: specifications.has_board_computer,
+        has_alarm: specifications.has_alarm,
+        has_air_conditioning: specifications.has_air_conditioning,
+        has_electric_windows: specifications.has_electric_windows,
+        has_multifunction_steering_wheel: specifications.has_multifunction_steering_wheel,
+        has_abs: specifications.has_abs,
+        // Add more features for debugging as needed
+      });
 
       console.log('Merged specifications:', specifications);
 
@@ -247,32 +388,32 @@ class CarCreate {
         specifications.fuel_type,
         specifications.mileage,
         specifications.mileage_unit,
-        specifications.engine_size,
+        // Convert engine_size to a format PostgreSQL can handle
+        this.adjustEngineSize(specifications.engine_size),
         specifications.cylinders,
         specifications.drive_type,
         specifications.airbags_count,
-        specifications.interior_material,
+        this.normalizeInteriorMaterial(specifications.interior_material),
         specifications.interior_color,
-        specifications.has_board_computer,
-        specifications.has_alarm,
-        specifications.has_air_conditioning,
-        specifications.has_parking_control,
-        specifications.has_rear_view_camera,
-        specifications.has_electric_windows,
-        specifications.has_climate_control,
-        specifications.has_cruise_control,
-        specifications.has_start_stop,
-        specifications.has_sunroof,
-        specifications.has_seat_heating,
-        specifications.has_abs,
-        specifications.has_traction_control,
-        specifications.has_central_locking,
-        specifications.has_fog_lights,
-        specifications.has_navigation,
-        specifications.has_bluetooth,
-        specifications.has_technical_inspection,
-        // manufacture_month removed as it doesn't exist in the database
-        specifications.clearance_status
+        Boolean(specifications.has_board_computer),
+        Boolean(specifications.has_alarm),
+        Boolean(specifications.has_air_conditioning),
+        Boolean(specifications.has_parking_control),
+        Boolean(specifications.has_rear_view_camera),
+        Boolean(specifications.has_electric_windows),
+        Boolean(specifications.has_climate_control),
+        Boolean(specifications.has_cruise_control),
+        Boolean(specifications.has_start_stop),
+        Boolean(specifications.has_sunroof),
+        Boolean(specifications.has_seat_heating),
+        Boolean(specifications.has_abs),
+        Boolean(specifications.has_traction_control),
+        Boolean(specifications.has_central_locking),
+        Boolean(specifications.has_fog_lights),
+        Boolean(specifications.has_navigation),
+        Boolean(specifications.has_bluetooth),
+        Boolean(specifications.has_technical_inspection),
+        specifications.clearance_status || 'not_cleared'
       ];
       
       // Log the parameters for debugging
@@ -282,6 +423,11 @@ class CarCreate {
       });
       console.log(`  Original steering_wheel value: ${specifications.steering_wheel}`);
       console.log(`  Will use hard-coded 'left' value in SQL query`);
+      
+      // Store multifunction_steering_wheel feature in a separate variable for later usage
+      // since it's not in the database schema yet
+      const hasMultifunctionSteeringWheel = Boolean(specifications.has_multifunction_steering_wheel);
+      console.log(`Has multifunction steering wheel: ${hasMultifunctionSteeringWheel} (not saved to database)`);
       
       // Verify the steering_wheel value one last time before database insertion
       console.log('[CarCreate] Final verification - will use hard-coded value: left');

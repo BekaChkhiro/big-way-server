@@ -11,8 +11,8 @@ function getPool() {
             rejectUnauthorized: false
           },
           max: 20, // Maximum number of clients in the pool
-          idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-          connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+          idleTimeoutMillis: 60000, // Close idle clients after 60 seconds
+          connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established
         }
       : {
           host: process.env.DB_HOST || 'localhost',
@@ -21,8 +21,8 @@ function getPool() {
           password: process.env.DB_PASSWORD || 'Lumia635-',
           database: process.env.NODE_ENV === 'test' ? 'big_way_test_db' : 'big_way_db',
           max: 20,
-          idleTimeoutMillis: 30000,
-          connectionTimeoutMillis: 2000,
+          idleTimeoutMillis: 60000,
+          connectionTimeoutMillis: 10000,
         };
 
     pool = new Pool(config);
