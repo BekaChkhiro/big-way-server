@@ -182,6 +182,9 @@ class CarCreate {
       // Validate brand and category
       await CarValidation.validateBrandAndCategory(client, carData.brand_id, carData.category_id, carData);
       
+      // Validate car data including VIN
+      CarValidation.validateCarData(carData);
+      
       // Validate specifications
       CarValidation.validateSpecifications(specifications);
       
@@ -565,8 +568,8 @@ class CarCreate {
         `INSERT INTO cars 
         (brand_id, category_id, location_id, specification_id, model, title, year, price, 
         description_ka, description_en, description_ru, status, featured, seller_id,
-        author_name, author_phone)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        author_name, author_phone, vin_code)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         RETURNING id`,
         [
           carData.brand_id,
@@ -584,7 +587,8 @@ class CarCreate {
           false,
           sellerId,
           carData.author_name || '',   // Include author name
-          carData.author_phone || ''    // Include author phone
+          carData.author_phone || '',   // Include author phone
+          carData.vin_code && carData.vin_code.trim() ? carData.vin_code : null // Include VIN code (null if empty)
         ]
       );
 
@@ -695,6 +699,9 @@ class CarCreate {
         author_name: updateData.author_name, 
         author_phone: updateData.author_phone 
       });
+
+      // Validate car data including VIN if being updated
+      CarValidation.validateCarData(updateData);
 
       // Check if the car exists
       const carCheckQuery = 'SELECT * FROM cars WHERE id = $1';
@@ -948,8 +955,9 @@ class CarCreate {
             currency = $9,
             description_ka = $10, 
             description_en = $11, 
-            description_ru = $12
-          WHERE id = $13
+            description_ru = $12,
+            vin_code = $13
+          WHERE id = $14
         `;
 
         // მოვამზადოთ მნიშვნელობების მასივი სწორი ტიპებით
@@ -966,6 +974,7 @@ class CarCreate {
           updateData.description_ka || null,
           updateData.description_en || null,
           updateData.description_ru || null,
+          updateData.vin_code && updateData.vin_code.trim() ? updateData.vin_code : null,
           parseInt(carId)
         ];
 

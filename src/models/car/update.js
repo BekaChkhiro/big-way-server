@@ -10,6 +10,9 @@ class CarUpdate {
       // Verify ownership
       await CarValidation.validateOwnership(client, id, sellerId);
 
+      // Validate car data including VIN
+      CarValidation.validateCarData(carData);
+
       // Update specifications
       if (carData.specifications) {
         CarValidation.validateSpecifications(carData.specifications);
@@ -152,7 +155,8 @@ class CarUpdate {
   static hasBasicUpdates(carData) {
     const updateableFields = [
       'brand_id', 'category_id', 'model', 'year', 'price',
-      'description_en', 'description_ka', 'description_ru', 'status', 'featured'
+      'description_en', 'description_ka', 'description_ru', 'status', 'featured',
+      'vin_code'
     ];
     return updateableFields.some(field => field in carData);
   }
@@ -160,7 +164,8 @@ class CarUpdate {
   static async updateBasicInfo(client, carId, carData) {
     const updateableFields = [
       'brand_id', 'category_id', 'model', 'year', 'price',
-      'description_en', 'description_ka', 'description_ru', 'status', 'featured'
+      'description_en', 'description_ka', 'description_ru', 'status', 'featured',
+      'vin_code'
     ];
 
     const updates = [];

@@ -111,7 +111,7 @@ app.use((err, req, res, next) => {
 
 // Only start the server if this file is run directly
 if (require.main === module) {
-  const PORT = process.env.PORT || 5001; // Changed from 5000 to 5001 to avoid conflict
+  const PORT = process.env.PORT || 5000; // Changed from 5000 to 5001 to avoid conflict
   
   // Test database connection before starting server
   pool.query('SELECT NOW()')

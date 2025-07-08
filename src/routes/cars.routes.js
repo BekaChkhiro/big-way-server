@@ -302,6 +302,7 @@ router.post('/', authMiddleware, carUpload.array('images', 10), async (req, res)
   try {
     const carData = JSON.parse(req.body.data);
     console.log('Parsed car data:', carData);
+    console.log('VIN code in received data:', carData.vin_code);
     
     // Process and upload images to AWS S3
     let processedImages = [];
@@ -914,6 +915,7 @@ router.get('/:id', async (req, res) => {
       created_at: car.created_at,
       updated_at: car.updated_at,
       category_name: car.category, // დავამატეთ category_name ველი, რომელიც იყენებს car.category ღირებულებას
+      vin_code: car.vin_code, // Add VIN code to the response
       // Create a properly nested specifications object
       specifications: {
         id: car.id,

@@ -8,6 +8,46 @@ const {
   BRAND_MODELS
 } = require('./base');
 
+// VIN validation utility function
+function validateVIN(vin) {
+  if (!vin) return true; // VIN is optional
+  
+  // Remove spaces and convert to uppercase
+  const cleanVIN = vin.replace(/\s/g, '').toUpperCase();
+  
+  // Check if VIN is exactly 17 characters
+  if (cleanVIN.length !== 17) {
+    return false;
+  }
+  
+  // Check if VIN contains only valid characters (no I, O, Q)
+  const vinPattern = /^[ABCDEFGHJKLMNPRSTUVWXYZ0-9]{17}$/;
+  if (!vinPattern.test(cleanVIN)) {
+    return false;
+  }
+  
+  // Simple check digit validation for position 9
+  const weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+  const values = {
+    'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8,
+    'J': 1, 'K': 2, 'L': 3, 'M': 4, 'N': 5, 'P': 7, 'R': 9,
+    'S': 2, 'T': 3, 'U': 4, 'V': 5, 'W': 6, 'X': 7, 'Y': 8, 'Z': 9,
+    '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9
+  };
+  
+  let sum = 0;
+  for (let i = 0; i < 17; i++) {
+    if (i !== 8) { // Skip check digit position
+      sum += (values[cleanVIN[i]] || 0) * weights[i];
+    }
+  }
+  
+  const checkDigit = sum % 11;
+  const expectedChar = checkDigit === 10 ? 'X' : checkDigit.toString();
+  
+  return cleanVIN[8] === expectedChar;
+}
+
 class CarValidation {
   static async validateBrandAndCategory(client, brandId, categoryId, carData) {
     console.log('Validating brand_id and category_id:', { brandId, categoryId });
@@ -193,6 +233,39 @@ class CarValidation {
     if (carCheck.rows[0].seller_id !== sellerId) {
       throw new Error('Unauthorized to modify this car');
     }
+  }
+
+  static validateCarData(carData) {
+    console.log('Validating car data:', carData);
+
+    // Validate VIN code if provided
+    if (carData.vin_code && carData.vin_code.trim()) {
+      if (!validateVIN(carData.vin_code)) {
+        throw new Error('Invalid VIN code format. VIN must be exactly 17 characters long and follow standard format');
+      }
+    }
+
+    // Validate other car data
+    if (carData.year) {
+      const currentYear = new Date().getFullYear();
+      const year = Number(carData.year);
+      if (isNaN(year) || year < 1900 || year > currentYear + 1) {
+        throw new Error(`Invalid year: Must be between 1900 and ${currentYear + 1}`);
+      }
+    }
+
+    if (carData.price) {
+      const price = Number(carData.price);
+      if (isNaN(price) || price <= 0) {
+        throw new Error('Invalid price: Must be a positive number');
+      }
+    }
+
+    return true;
+  }
+
+  static validateVIN(vin) {
+    return validateVIN(vin);
   }
 }
 
