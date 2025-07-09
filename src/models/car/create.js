@@ -35,39 +35,23 @@ class CarCreate {
     }
   }
   
-  // Helper function to adjust engine size to a valid value
+  // Helper function to validate engine size
   adjustEngineSize(engineSize) {
-    if (engineSize === undefined || engineSize === null) {
-      return 1.6; // Default value
+    if (engineSize === undefined || engineSize === null || engineSize === '') {
+      return null; // Return null instead of default value
     }
     
     // Parse to float if it's a string
     const size = parseFloat(engineSize);
     
     // Check if it's a valid number
-    if (isNaN(size)) {
-      return 1.6; // Default if invalid
+    if (isNaN(size) || size <= 0 || size > 13.0) {
+      return null; // Return null if invalid
     }
     
-    // Valid values are from 0.05 to 13.0 with 0.1 increments
-    const validValues = [];
-    for (let i = 0.05; i <= 13.0; i += 0.1) {
-      validValues.push(parseFloat(i.toFixed(2)));
-    }
-    
-    // Find the closest valid value
-    let closestValue = validValues[0];
-    let minDiff = Math.abs(size - closestValue);
-    
-    for (let i = 1; i < validValues.length; i++) {
-      const diff = Math.abs(size - validValues[i]);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestValue = validValues[i];
-      }
-    }
-    
-    return closestValue;
+    // Return the exact value from the frontend without adjustment
+    // The dropdown already provides valid values
+    return size;
   }
   async create(carData, images, sellerId, processedImages = []) {
     const client = await pool.connect();
@@ -93,6 +77,7 @@ class CarCreate {
         airbags_count: Number((carData.specifications?.airbags_count) || carData.airbags_count || 0),
         interior_material: (carData.specifications?.interior_material) || carData.interior_material || 'leather',
         interior_color: (carData.specifications?.interior_color) || carData.interior_color || 'black',
+        color: (carData.specifications?.color) || carData.color || '',
         doors: (carData.specifications?.doors) || carData.doors || 4,
         clearance_status: (carData.specifications?.clearance_status) || carData.clearance_status
       };
@@ -277,40 +262,8 @@ class CarCreate {
       
       console.log('[CarCreate] Normalized mileage_unit value:', specifications.mileage_unit);
 
-      // Ensure engine_size is one of the allowed values for the valid_engine_size constraint
-      if (specifications.engine_size !== undefined) {
-        const engineSize = parseFloat(specifications.engine_size);
-        // Check if it's a valid number
-        if (!isNaN(engineSize)) {
-          // Round to nearest valid value in the constraint
-          // Valid values are from 0.05 to 13.0 with 0.1 increments
-          const validValues = [];
-          for (let i = 0.05; i <= 13.0; i += 0.1) {
-            validValues.push(parseFloat(i.toFixed(2)));
-          }
-          
-          // Find the closest valid value
-          let closestValue = validValues[0];
-          let minDiff = Math.abs(engineSize - closestValue);
-          
-          for (let i = 1; i < validValues.length; i++) {
-            const diff = Math.abs(engineSize - validValues[i]);
-            if (diff < minDiff) {
-              minDiff = diff;
-              closestValue = validValues[i];
-            }
-          }
-          
-          specifications.engine_size = closestValue;
-          console.log(`[CarCreate] Adjusted engine_size to valid value: ${specifications.engine_size}`);
-        } else {
-          specifications.engine_size = 1.6; // Default to 1.6 if invalid
-          console.log(`[CarCreate] Invalid engine_size, defaulting to: ${specifications.engine_size}`);
-        }
-      } else {
-        specifications.engine_size = 1.6; // Default to 1.6 if not provided
-        console.log(`[CarCreate] No engine_size provided, defaulting to: ${specifications.engine_size}`);
-      }
+      // Just log the engine_size value without modifying it
+      console.log('[CarCreate] Engine size value:', specifications.engine_size);
       
       console.log('[CarCreate] Final engine_size value:', specifications.engine_size);
 
@@ -385,7 +338,7 @@ class CarCreate {
       // Completely removing the doors field due to foreign key constraint
       console.log(`[CarCreate] Removing doors field from the database query due to foreign key constraint violation`);
       
-      // Create parameters WITHOUT the steering_wheel, transmission, and doors fields
+      // Create parameters INCLUDING color and steering_wheel fields
       const finalSpecParams = [
         specifications.engine_type,
         specifications.fuel_type,
@@ -398,6 +351,9 @@ class CarCreate {
         specifications.airbags_count,
         this.normalizeInteriorMaterial(specifications.interior_material),
         specifications.interior_color,
+        specifications.color || null,  // Add color
+        // Use English value 'left' or 'right' as required by database constraint
+        specifications.steering_wheel || 'left',  // Using English values now that DB constraint is fixed
         Boolean(specifications.has_board_computer),
         Boolean(specifications.has_alarm),
         Boolean(specifications.has_air_conditioning),
@@ -425,7 +381,7 @@ class CarCreate {
         console.log(`  Param $${index + 1}: ${typeof param} = ${param}`);
       });
       console.log(`  Original steering_wheel value: ${specifications.steering_wheel}`);
-      console.log(`  Will use hard-coded 'left' value in SQL query`);
+      console.log(`  Will use English value '${specifications.steering_wheel || 'left'}' for steering_wheel`);
       
       // Store multifunction_steering_wheel feature in a separate variable for later usage
       // since it's not in the database schema yet
@@ -433,13 +389,13 @@ class CarCreate {
       console.log(`Has multifunction steering wheel: ${hasMultifunctionSteeringWheel} (not saved to database)`);
       
       // Verify the steering_wheel value one last time before database insertion
-      console.log('[CarCreate] Final verification - will use hard-coded value: left');
+      console.log(`[CarCreate] Final verification - will use English value '${specifications.steering_wheel || 'left'}' for steering_wheel`);
       
       const specResult = await client.query(
         `INSERT INTO specifications 
         (engine_type, fuel_type, mileage, mileage_unit, 
         engine_size, cylinders, drive_type,
-        airbags_count, interior_material, interior_color,
+        airbags_count, interior_material, interior_color, color, steering_wheel,
         has_board_computer, has_alarm, has_air_conditioning,
         has_parking_control, has_rear_view_camera, has_electric_windows,
         has_climate_control, has_cruise_control, has_start_stop,
@@ -458,25 +414,27 @@ class CarCreate {
          $8 /* airbags_count */, 
          $9 /* interior_material */, 
          $10 /* interior_color */, 
-         $11 /* has_board_computer */, 
-         $12 /* has_alarm */,
-         $13 /* has_air_conditioning */,
-         $14 /* has_parking_control */,
-         $15 /* has_rear_view_camera */,
-         $16 /* has_electric_windows */,
-         $17 /* has_climate_control */,
-         $18 /* has_cruise_control */,
-         $19 /* has_start_stop */,
-         $20 /* has_sunroof */,
-         $21 /* has_seat_heating */,
-         $22 /* has_abs */,
-         $23 /* has_traction_control */,
-         $24 /* has_central_locking */,
-         $25 /* has_fog_lights */,
-         $26 /* has_navigation */,
-         $27 /* has_bluetooth */,
-         $28 /* has_technical_inspection */,
-         $29 /* clearance_status */)
+         $11 /* color */,
+         $12 /* steering_wheel */,
+         $13 /* has_board_computer */, 
+         $14 /* has_alarm */,
+         $15 /* has_air_conditioning */,
+         $16 /* has_parking_control */,
+         $17 /* has_rear_view_camera */,
+         $18 /* has_electric_windows */,
+         $19 /* has_climate_control */,
+         $20 /* has_cruise_control */,
+         $21 /* has_start_stop */,
+         $22 /* has_sunroof */,
+         $23 /* has_seat_heating */,
+         $24 /* has_abs */,
+         $25 /* has_traction_control */,
+         $26 /* has_central_locking */,
+         $27 /* has_fog_lights */,
+         $28 /* has_navigation */,
+         $29 /* has_bluetooth */,
+         $30 /* has_technical_inspection */,
+         $31 /* clearance_status */)
         RETURNING id`,
         finalSpecParams
       );

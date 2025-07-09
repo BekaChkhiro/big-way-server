@@ -117,7 +117,6 @@ class CarUpdate {
         specs.has_start_stop,
         specs.has_sunroof,
         specs.has_seat_heating,
-        specs.has_seat_memory,
         specs.has_abs,
         specs.has_traction_control,
         specs.has_central_locking,

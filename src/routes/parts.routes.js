@@ -4,6 +4,7 @@ const PartsController = require('../controllers/parts/parts.controller');
 const authMiddleware = require('../middlewares/auth.middleware');
 
 // Public routes
+router.get('/', PartsController.search.bind(PartsController));
 router.get('/search', PartsController.search.bind(PartsController));
 router.get('/brands/all', PartsController.getBrands.bind(PartsController));
 router.get('/models/by-brand/:brandId', PartsController.getModelsByBrand.bind(PartsController));
