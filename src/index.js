@@ -17,6 +17,7 @@ const balanceRoutes = require('./routes/balance.routes');
 const adminVipRoutes = require('./routes/adminVip.routes');
 const userRoutes = require('./routes/user.routes');
 const vipPricingRoutes = require('./routes/vipPricingRoutes');
+const analyticsRoutes = require('./routes/analytics.routes');
 const specs = require('./docs/swagger');
 const pool = require('../config/db.config');
 
@@ -98,6 +99,7 @@ app.use('/api/balance', balanceRoutes);
 app.use('/api/admin', adminVipRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api', vipPricingRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Big Way API' });
