@@ -215,9 +215,11 @@ class CarCreate {
       
       console.log('[CarCreate] Normalized drive_type value:', specifications.drive_type);
 
-      // Ensure transmission is exactly one of the allowed values (no case issues, no hidden chars)
+      // Ensure transmission is exactly one of the allowed values and convert to Georgian
       if (specifications.transmission) {
         const normalizedTransmission = specifications.transmission.trim().toLowerCase();
+        
+        // Keep English values for transmission (database expects English)
         if (['manual', 'automatic', 'tiptronic', 'variator'].includes(normalizedTransmission)) {
           specifications.transmission = normalizedTransmission;
         } else {
@@ -332,8 +334,8 @@ class CarCreate {
       // Completely removing the steering_wheel field as requested
       console.log(`[CarCreate] Removing steering_wheel field from the database query`);
       
-      // Completely removing the transmission field as requested
-      console.log(`[CarCreate] Removing transmission field from the database query`);
+      // Temporarily excluding transmission field due to constraint conflicts
+      console.log(`[CarCreate] Temporarily excluding transmission field due to constraint conflicts:`, specifications.transmission);
       
       // Completely removing the doors field due to foreign key constraint
       console.log(`[CarCreate] Removing doors field from the database query due to foreign key constraint violation`);
