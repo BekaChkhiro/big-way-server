@@ -5,18 +5,32 @@ const pool = require('./db.config');
 const UserModel = require('../src/models/user/base');
 const { generateToken, generateRefreshToken } = require('./jwt.config');
 
-// Setup passport with OAuth strategies
-// Log environment variables during initialization (without exposing secrets)
-console.log('Initializing OAuth strategies with:');
-console.log('- GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'Defined' : 'Missing');
-console.log('- GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Defined' : 'Missing');
-console.log('- GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback');
-console.log('- FACEBOOK_APP_ID:', process.env.FACEBOOK_APP_ID ? 'Defined' : 'Missing');
-console.log('- FACEBOOK_APP_SECRET:', process.env.FACEBOOK_APP_SECRET ? 'Defined' : 'Missing');
-console.log('- FACEBOOK_CALLBACK_URL:', process.env.FACEBOOK_CALLBACK_URL || '/auth/facebook/callback');
-console.log('- FRONTEND_URL:', process.env.FRONTEND_URL || 'Not defined');
+// Check if environment variables are loaded
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  console.error('ERROR: Google OAuth environment variables are not defined!');
+  console.error('Please ensure:');
+  console.error('1. .env file exists in the root directory');
+  console.error('2. .env file contains GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET');
+  console.error('3. dotenv is loaded before this module');
+  console.error('Current environment variables:');
+  console.error('- GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID || 'NOT DEFINED');
+  console.error('- GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Defined' : 'NOT DEFINED');
+  
+  // Skip Google OAuth initialization if variables are missing
+  console.warn('Skipping Google OAuth strategy initialization due to missing credentials');
+} else {
+  // Setup passport with OAuth strategies
+  // Log environment variables during initialization (without exposing secrets)
+  console.log('Initializing OAuth strategies with:');
+  console.log('- GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'Defined' : 'Missing');
+  console.log('- GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Defined' : 'Missing');
+  console.log('- GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback');
+  console.log('- FACEBOOK_APP_ID:', process.env.FACEBOOK_APP_ID ? 'Defined' : 'Missing');
+  console.log('- FACEBOOK_APP_SECRET:', process.env.FACEBOOK_APP_SECRET ? 'Defined' : 'Missing');
+  console.log('- FACEBOOK_CALLBACK_URL:', process.env.FACEBOOK_CALLBACK_URL || '/auth/facebook/callback');
+  console.log('- FRONTEND_URL:', process.env.FRONTEND_URL || 'Not defined');
 
-passport.use(new GoogleStrategy({
+  passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: process.env.GOOGLE_CALLBACK_URL || "/api/auth/google/callback", // Make sure it includes /api prefix
@@ -141,6 +155,7 @@ passport.use(new GoogleStrategy({
     }
   }
 ));
+}
 
 // Facebook OAuth Strategy - only initialize if credentials are available
 if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {

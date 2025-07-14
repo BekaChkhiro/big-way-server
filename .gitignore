@@ -24,3 +24,7 @@ coverage/
 
 # Uploads directory
 uploads/
+
+# Google Analytics credentials
+config/google-analytics-key.json
+config/GOOGLE_ANALYTICS_SETUP.md

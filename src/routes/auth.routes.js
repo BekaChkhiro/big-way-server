@@ -5,9 +5,6 @@ const authMiddleware = require('../middlewares/auth.middleware');
 const User = require('../models/user');
 const pool = require('../../config/db.config');
 
-// Initialize passport
-require('../../config/passport.config');
-
 // Registration route
 router.post('/register', async (req, res) => {
   try {

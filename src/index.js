@@ -1,12 +1,22 @@
 const dotenv = require('dotenv');
 // Load environment variables first
 dotenv.config();
+
+// Log environment variables to debug
+console.log('Environment variables loaded:');
+console.log('- GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'Defined' : 'NOT DEFINED');
+console.log('- GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Defined' : 'NOT DEFINED');
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const passport = require('passport');
 const swaggerUi = require('swagger-ui-express');
 const winston = require('winston');
+
+// Initialize passport configuration before loading routes
+require('../config/passport.config');
+
 const authRoutes = require('./routes/auth.routes');
 const carsRoutes = require('./routes/cars.routes');
 const partsRoutes = require('./routes/parts.routes');
