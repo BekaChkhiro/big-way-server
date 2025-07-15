@@ -63,14 +63,14 @@ class CarCreate {
       // Create specifications object with computed/default values
       const specifications = {
         engine_type: (carData.specifications?.engine_type) || carData.engine_type || 'gasoline',
-        transmission: (carData.specifications?.transmission) || carData.transmission || 'manual',
+        transmission: (carData.specifications?.transmission) || carData.transmission || 'automatic',
         fuel_type: (carData.specifications?.fuel_type) || carData.fuel_type || 'ბენზინი',
         mileage: Number((carData.specifications?.mileage) || carData.mileage || 0),
         mileage_unit: (carData.specifications?.mileage_unit) || carData.mileage_unit || 'km',
         engine_size: parseFloat((carData.specifications?.engine_size) || carData.engine_size || 0),
         cylinders: Number((carData.specifications?.cylinders) || carData.cylinders || 0),
 
-        // Sanitize steering_wheel to be only 'left' or 'right'
+        // Sanitize steering_wheel to be only 'left' or 'right' (will be converted to Georgian later)
         steering_wheel: (((carData.specifications?.steering_wheel) || carData.steering_wheel || 'left').toLowerCase().trim() === 'right' ? 'right' : 'left'),
         // Use provided drive_type or default to 'front'
         drive_type: (carData.specifications?.drive_type) || carData.drive_type || 'front',
@@ -176,7 +176,7 @@ class CarCreate {
       // Log the exact steering wheel value before DB insert
       console.log('[CarCreate] Value for steering_wheel before insert:', specifications.steering_wheel);
 
-      // Ensure steering_wheel is exactly 'left' or 'right' (no case issues, no hidden chars)
+      // Ensure steering_wheel is exactly 'left' or 'right' (English values for specifications_steering_wheel_check)
       if (specifications.steering_wheel) {
         // First, trim any whitespace and convert to lowercase
         let normalizedSteeringWheel = String(specifications.steering_wheel).trim().toLowerCase();
@@ -184,19 +184,22 @@ class CarCreate {
         // Log the normalized value for debugging
         console.log('[CarCreate] Normalized steering_wheel (after trim and lowercase):', normalizedSteeringWheel);
         
-        // Force the value to be exactly 'left' or 'right' - strict comparison
-        if (normalizedSteeringWheel === 'right') {
-          specifications.steering_wheel = 'right';
-        } else {
-          specifications.steering_wheel = 'left';
-        }
+        // Map Georgian to English values (reverse mapping)
+        const steeringWheelMap = {
+          'მარცხენა': 'left',
+          'მარჯვენა': 'right'
+        };
         
-        // Additional validation to ensure it's exactly one of the allowed values
-        if (specifications.steering_wheel !== 'left' && specifications.steering_wheel !== 'right') {
-          specifications.steering_wheel = 'left'; // Fallback to default if somehow still invalid
+        // Check if it's already English
+        if (['left', 'right'].includes(normalizedSteeringWheel)) {
+          specifications.steering_wheel = normalizedSteeringWheel;
+        } else if (steeringWheelMap[normalizedSteeringWheel]) {
+          specifications.steering_wheel = steeringWheelMap[normalizedSteeringWheel];
+        } else {
+          specifications.steering_wheel = 'left'; // Default to English left
         }
       } else {
-        specifications.steering_wheel = 'left'; // Default to left if not provided
+        specifications.steering_wheel = 'left'; // Default to English left if not provided
       }
       
       console.log('[CarCreate] Final steering_wheel value:', specifications.steering_wheel);
@@ -215,15 +218,29 @@ class CarCreate {
       
       console.log('[CarCreate] Normalized drive_type value:', specifications.drive_type);
 
-      // Ensure transmission is exactly one of the allowed values and convert to Georgian
+      // Ensure transmission is exactly one of the allowed values (English for specifications_transmission_check)
       if (specifications.transmission) {
         const normalizedTransmission = specifications.transmission.trim().toLowerCase();
+        const validTransmissions = [
+          'manual', 'automatic', 'tiptronic', 'variator'
+        ];
         
-        // Keep English values for transmission (database expects English)
-        if (['manual', 'automatic', 'tiptronic', 'variator'].includes(normalizedTransmission)) {
+        if (validTransmissions.includes(normalizedTransmission)) {
           specifications.transmission = normalizedTransmission;
         } else {
-          specifications.transmission = 'automatic'; // Default to automatic if invalid
+          // Map Georgian transmission types to English equivalents
+          const transmissionMap = {
+            'მექანიკა': 'manual',
+            'ავტომატიკა': 'automatic',
+            'ტიპტრონიკი': 'tiptronic',
+            'ვარიატორი': 'variator'
+          };
+          
+          if (transmissionMap[specifications.transmission]) {
+            specifications.transmission = transmissionMap[specifications.transmission];
+          } else {
+            specifications.transmission = 'automatic'; // Default to automatic if invalid
+          }
         }
       } else {
         specifications.transmission = 'automatic'; // Default to automatic if not provided
@@ -242,7 +259,25 @@ class CarCreate {
         if (validFuelTypes.includes(normalizedFuelType)) {
           specifications.fuel_type = normalizedFuelType;
         } else {
-          specifications.fuel_type = 'ბენზინი'; // Default to ბენზინი if invalid
+          // Map English fuel types to Georgian equivalents
+          const fuelTypeMap = {
+            'gasoline': 'ბენზინი',
+            'petrol': 'ბენზინი',
+            'diesel': 'დიზელი',
+            'electric': 'ელექტრო',
+            'hybrid': 'ჰიბრიდი',
+            'plug-in hybrid': 'დატენვადი_ჰიბრიდი',
+            'lpg': 'თხევადი_გაზი',
+            'natural gas': 'ბუნებრივი_გაზი',
+            'hydrogen': 'წყალბადი'
+          };
+          
+          const englishFuelType = normalizedFuelType.toLowerCase();
+          if (fuelTypeMap[englishFuelType]) {
+            specifications.fuel_type = fuelTypeMap[englishFuelType];
+          } else {
+            specifications.fuel_type = 'ბენზინი'; // Default to ბენზინი if invalid
+          }
         }
       } else {
         specifications.fuel_type = 'ბენზინი'; // Default to ბენზინი if not provided
@@ -331,18 +366,10 @@ class CarCreate {
       
       console.log('[CarCreate] Normalized clearance_status value:', specifications.clearance_status);
 
-      // Completely removing the steering_wheel field as requested
-      console.log(`[CarCreate] Removing steering_wheel field from the database query`);
-      
-      // Temporarily excluding transmission field due to constraint conflicts
-      console.log(`[CarCreate] Temporarily excluding transmission field due to constraint conflicts:`, specifications.transmission);
-      
-      // Completely removing the doors field due to foreign key constraint
-      console.log(`[CarCreate] Removing doors field from the database query due to foreign key constraint violation`);
-      
-      // Create parameters INCLUDING color and steering_wheel fields
+      // Create parameters INCLUDING color, steering_wheel, and transmission fields
       const finalSpecParams = [
         specifications.engine_type,
+        specifications.transmission || 'automatic',  // Add transmission with English default
         specifications.fuel_type,
         specifications.mileage,
         specifications.mileage_unit,
@@ -354,8 +381,8 @@ class CarCreate {
         this.normalizeInteriorMaterial(specifications.interior_material),
         specifications.interior_color,
         specifications.color || null,  // Add color
-        // Use English value 'left' or 'right' as required by database constraint
-        specifications.steering_wheel || 'left',  // Using English values now that DB constraint is fixed
+        // Use English value 'left' or 'right' as required by specifications_steering_wheel_check constraint
+        specifications.steering_wheel || 'left',  // Using English values for steering_wheel
         Boolean(specifications.has_board_computer),
         Boolean(specifications.has_alarm),
         Boolean(specifications.has_air_conditioning),
@@ -382,20 +409,46 @@ class CarCreate {
       finalSpecParams.forEach((param, index) => {
         console.log(`  Param $${index + 1}: ${typeof param} = ${param}`);
       });
+      
+      // Extra debugging for transmission specifically
+      console.log('[CarCreate] TRANSMISSION DEBUG:');
+      console.log('  - Raw transmission from input:', carData.specifications?.transmission || carData.transmission);
+      console.log('  - Normalized transmission:', specifications.transmission);
+      console.log('  - Final transmission parameter (index 1):', finalSpecParams[1]);
+      console.log('  - Parameter $2 (transmission) will be:', finalSpecParams[1]);
+      console.log(`  Original transmission value: ${specifications.transmission}`);
+      console.log(`  Will use value '${specifications.transmission || 'automatic'}' for transmission`);
       console.log(`  Original steering_wheel value: ${specifications.steering_wheel}`);
       console.log(`  Will use English value '${specifications.steering_wheel || 'left'}' for steering_wheel`);
       
-      // Store multifunction_steering_wheel feature in a separate variable for later usage
       // since it's not in the database schema yet
       const hasMultifunctionSteeringWheel = Boolean(specifications.has_multifunction_steering_wheel);
       console.log(`Has multifunction steering wheel: ${hasMultifunctionSteeringWheel} (not saved to database)`);
       
-      // Verify the steering_wheel value one last time before database insertion
-      console.log(`[CarCreate] Final verification - will use English value '${specifications.steering_wheel || 'left'}' for steering_wheel`);
+      // Verify the transmission and steering_wheel values one last time before database insertion
+      console.log(`[CarCreate] Final verification - will use transmission '${specifications.transmission || 'automatic'}' and steering_wheel '${specifications.steering_wheel || 'left'}'`);
+      
+      // Debug: Check what constraints are actually active on the specifications table
+      try {
+        const constraintsQuery = await client.query(`
+          SELECT conname, pg_get_constraintdef(oid) as definition 
+          FROM pg_constraint 
+          WHERE conrelid = 'specifications'::regclass::oid 
+          AND conname LIKE '%steering_wheel%' OR conname LIKE '%transmission%'
+        `);
+        console.log('[CarCreate] Active constraints:', constraintsQuery.rows);
+      } catch (constraintError) {
+        console.log('[CarCreate] Could not check constraints:', constraintError.message);
+      }
+      
+      // Debug: Log the exact values being sent to the database
+      console.log('[CarCreate] EXACT VALUES BEING SENT TO DATABASE:');
+      console.log('  - steering_wheel:', JSON.stringify(finalSpecParams[12]), 'type:', typeof finalSpecParams[12]);
+      console.log('  - transmission:', JSON.stringify(finalSpecParams[1]), 'type:', typeof finalSpecParams[1]);
       
       const specResult = await client.query(
         `INSERT INTO specifications 
-        (engine_type, fuel_type, mileage, mileage_unit, 
+        (engine_type, transmission, fuel_type, mileage, mileage_unit, 
         engine_size, cylinders, drive_type,
         airbags_count, interior_material, interior_color, color, steering_wheel,
         has_board_computer, has_alarm, has_air_conditioning,
@@ -407,36 +460,37 @@ class CarCreate {
         has_technical_inspection, clearance_status)
         VALUES 
         ($1 /* engine_type */, 
-         $2 /* fuel_type */, 
-         $3 /* mileage */, 
-         $4 /* mileage_unit */, 
-         $5 /* engine_size */, 
-         $6 /* cylinders */, 
-         $7 /* drive_type */, 
-         $8 /* airbags_count */, 
-         $9 /* interior_material */, 
-         $10 /* interior_color */, 
-         $11 /* color */,
-         $12 /* steering_wheel */,
-         $13 /* has_board_computer */, 
-         $14 /* has_alarm */,
-         $15 /* has_air_conditioning */,
-         $16 /* has_parking_control */,
-         $17 /* has_rear_view_camera */,
-         $18 /* has_electric_windows */,
-         $19 /* has_climate_control */,
-         $20 /* has_cruise_control */,
-         $21 /* has_start_stop */,
-         $22 /* has_sunroof */,
-         $23 /* has_seat_heating */,
-         $24 /* has_abs */,
-         $25 /* has_traction_control */,
-         $26 /* has_central_locking */,
-         $27 /* has_fog_lights */,
-         $28 /* has_navigation */,
-         $29 /* has_bluetooth */,
-         $30 /* has_technical_inspection */,
-         $31 /* clearance_status */)
+         $2 /* transmission */, 
+         $3 /* fuel_type */, 
+         $4 /* mileage */, 
+         $5 /* mileage_unit */, 
+         $6 /* engine_size */, 
+         $7 /* cylinders */, 
+         $8 /* drive_type */, 
+         $9 /* airbags_count */, 
+         $10 /* interior_material */, 
+         $11 /* interior_color */, 
+         $12 /* color */,
+         $13 /* steering_wheel */,
+         $14 /* has_board_computer */, 
+         $15 /* has_alarm */,
+         $16 /* has_air_conditioning */,
+         $17 /* has_parking_control */,
+         $18 /* has_rear_view_camera */,
+         $19 /* has_electric_windows */,
+         $20 /* has_climate_control */,
+         $21 /* has_cruise_control */,
+         $22 /* has_start_stop */,
+         $23 /* has_sunroof */,
+         $24 /* has_seat_heating */,
+         $25 /* has_abs */,
+         $26 /* has_traction_control */,
+         $27 /* has_central_locking */,
+         $28 /* has_fog_lights */,
+         $29 /* has_navigation */,
+         $30 /* has_bluetooth */,
+         $31 /* has_technical_inspection */,
+         $32 /* clearance_status */)
         RETURNING id`,
         finalSpecParams
       );
@@ -562,6 +616,13 @@ class CarCreate {
             const processedImage = processedImages[i];
             // The table has image_url instead of url column
             console.log(`[CarCreate] Using S3 URLs for image ${i}`);
+            
+            // Validate that all required URLs exist
+            if (!processedImage.original || !processedImage.thumbnail || !processedImage.medium || !processedImage.large) {
+              console.error(`[CarCreate] Missing required URLs in processedImage:`, processedImage);
+              throw new Error('Invalid processed image data');
+            }
+            
             const imageResult = await client.query(
               `INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url)
               VALUES ($1, $2, $3, $4, $5)
@@ -583,31 +644,39 @@ class CarCreate {
               large_url: processedImage.large
             });
           }
-        } else {
+        } else if (images && images.length > 0) {
           // Fallback to local storage
           console.log(`[CarCreate] Using local storage for images as fallback`);
           for (const file of images) {
-            // The table has image_url instead of url column
-            console.log(`[CarCreate] Using image_url column instead of url in car_images table query`);
+            // Check if file has required properties
+            if (!file.filename && !file.originalname) {
+              console.error(`[CarCreate] Invalid file object:`, file);
+              continue; // Skip invalid files
+            }
+            
+            const filename = file.filename || file.originalname;
+            const imageUrl = `/uploads/cars/${filename}`;
+            
+            console.log(`[CarCreate] Inserting local image: ${imageUrl}`);
             const imageResult = await client.query(
               `INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url)
               VALUES ($1, $2, $3, $4, $5)
               RETURNING id`,
               [
                 carResult.rows[0].id,
-                `/uploads/cars/${file.filename}`, // image_url
-                `/uploads/cars/${file.filename}`, // thumbnail_url
-                `/uploads/cars/${file.filename}`, // medium_url
-                `/uploads/cars/${file.filename}`  // large_url
+                imageUrl, // image_url
+                imageUrl, // thumbnail_url (same as original for local)
+                imageUrl, // medium_url (same as original for local)
+                imageUrl  // large_url (same as original for local)
               ]
             );
             // Update the returned object to match the database schema
             carImages.push({
               id: imageResult.rows[0].id,
-              image_url: `/uploads/cars/${file.filename}`,
-              thumbnail_url: `/uploads/cars/${file.filename}`,
-              medium_url: `/uploads/cars/${file.filename}`,
-              large_url: `/uploads/cars/${file.filename}`
+              image_url: imageUrl,
+              thumbnail_url: imageUrl,
+              medium_url: imageUrl,
+              large_url: imageUrl
             });
           }
         }
@@ -788,8 +857,8 @@ class CarCreate {
             // მომზადებული პარამეტრები
             const specParams = [
               carId,
-              specificationsData.transmission || null,
               specificationsData.fuel_type || null,
+              specificationsData.transmission || null,
               specificationsData.body_type || null,
               specificationsData.drive_type || null,
               specificationsData.steering_wheel || null,
