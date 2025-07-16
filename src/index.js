@@ -81,10 +81,6 @@ app.use(express.urlencoded({ extended: true }));
 // Initialize Passport
 app.use(passport.initialize());
 
-// Serve static files from the uploads directory
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-console.log('Serving static files from:', path.join(__dirname, '../uploads'));
-
 // Logging middleware
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.url}`, {

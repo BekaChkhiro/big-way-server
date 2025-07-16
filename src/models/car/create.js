@@ -645,40 +645,9 @@ class CarCreate {
             });
           }
         } else if (images && images.length > 0) {
-          // Fallback to local storage
-          console.log(`[CarCreate] Using local storage for images as fallback`);
-          for (const file of images) {
-            // Check if file has required properties
-            if (!file.filename && !file.originalname) {
-              console.error(`[CarCreate] Invalid file object:`, file);
-              continue; // Skip invalid files
-            }
-            
-            const filename = file.filename || file.originalname;
-            const imageUrl = `/uploads/cars/${filename}`;
-            
-            console.log(`[CarCreate] Inserting local image: ${imageUrl}`);
-            const imageResult = await client.query(
-              `INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url)
-              VALUES ($1, $2, $3, $4, $5)
-              RETURNING id`,
-              [
-                carResult.rows[0].id,
-                imageUrl, // image_url
-                imageUrl, // thumbnail_url (same as original for local)
-                imageUrl, // medium_url (same as original for local)
-                imageUrl  // large_url (same as original for local)
-              ]
-            );
-            // Update the returned object to match the database schema
-            carImages.push({
-              id: imageResult.rows[0].id,
-              image_url: imageUrl,
-              thumbnail_url: imageUrl,
-              medium_url: imageUrl,
-              large_url: imageUrl
-            });
-          }
+          // No fallback to local storage - S3 is required
+          console.log(`[CarCreate] No processed images from S3 and local storage is disabled`);
+          throw new Error('Image upload failed. S3 storage is required.');
         }
       }
 
@@ -912,7 +881,7 @@ class CarCreate {
                 city = $2,
                 country = $3,
                 location_type = $4,
-                is_transit = $5
+                is_in_transit = $5
               WHERE id = $1
             `;
             
@@ -922,7 +891,7 @@ class CarCreate {
               locationData.city || null,
               locationData.country || null,
               locationData.location_type || null,
-              locationData.is_transit || false
+              locationData.is_in_transit || false
             ];
             
             console.log('[CarCreate.update] Using fixed field update for location');
@@ -936,7 +905,7 @@ class CarCreate {
             // Create new location with fixed fields
             const createLocQuery = `
               INSERT INTO locations (
-                car_id, city, country, location_type, is_transit
+                car_id, city, country, location_type, is_in_transit
               ) VALUES ($1, $2, $3, $4, $5) 
               RETURNING id
             `;
@@ -947,7 +916,7 @@ class CarCreate {
               locationData.city || null,
               locationData.country || null,
               locationData.location_type || null,
-              locationData.is_transit || false
+              locationData.is_in_transit || false
             ];
             
             await client.query(createLocQuery, locParams);

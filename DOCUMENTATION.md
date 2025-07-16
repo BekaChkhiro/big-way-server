@@ -185,7 +185,7 @@ The application uses a comprehensive PostgreSQL database schema with the followi
 ### Locations Table
 - `id`: Serial Primary Key
 - `location_type`: Type using enum `location_type` ('transit', 'georgia', 'international')
-- `is_transit`: Boolean flag for transit locations
+- `is_in_transit`: Boolean flag for transit locations
 - `city`: City name (VARCHAR(100))
 - `state`: State/region name (VARCHAR(100), nullable)
 - `country`: Country name (VARCHAR(100), nullable)
