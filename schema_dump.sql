@@ -537,7 +537,7 @@ CREATE TABLE public.specifications (
     has_cruise_control boolean DEFAULT false,
     has_start_stop boolean DEFAULT false,
     has_sunroof boolean DEFAULT false,
-    has_seat_heating boolean DEFAULT false,
+    has_heated_seats boolean DEFAULT false,
     has_seat_memory boolean DEFAULT false,
     has_abs boolean DEFAULT false,
     has_traction_control boolean DEFAULT false,
