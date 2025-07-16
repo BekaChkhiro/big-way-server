@@ -158,7 +158,7 @@ class CarModel {
           'has_air_conditioning', s.has_air_conditioning,
           'has_parking_control', s.has_parking_control,
           'has_rear_view_camera', s.has_rear_view_camera,
-          'has_seat_heating', s.has_seat_heating
+          'has_heated_seats', s.has_heated_seats
         ) as specifications,
         json_build_object(
           'id', l.id,

@@ -129,7 +129,7 @@ const options = {
             has_sunroof: {
               type: 'boolean'
             },
-            has_seat_heating: {
+            has_heated_seats: {
               type: 'boolean'
             },
             has_seat_memory: {

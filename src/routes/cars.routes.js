@@ -915,7 +915,7 @@ router.get('/:id', async (req, res) => {
     console.log('has_cruise_control:', car.has_cruise_control);
     console.log('has_start_stop:', car.has_start_stop);
     console.log('has_sunroof:', car.has_sunroof);
-    console.log('has_seat_heating:', car.has_seat_heating);
+    console.log('has_heated_seats:', car.has_heated_seats);
     console.log('has_abs:', car.has_abs);
     console.log('has_traction_control:', car.has_traction_control);
     console.log('has_central_locking:', car.has_central_locking);
@@ -979,7 +979,7 @@ router.get('/:id', async (req, res) => {
         has_cruise_control: Boolean(car.has_cruise_control),
         has_start_stop: Boolean(car.has_start_stop),
         has_sunroof: Boolean(car.has_sunroof),
-        has_seat_heating: Boolean(car.has_seat_heating),
+        has_heated_seats: Boolean(car.has_heated_seats),
         has_seat_memory: Boolean(car.has_seat_memory),
         has_abs: Boolean(car.has_abs),
         has_traction_control: Boolean(car.has_traction_control),

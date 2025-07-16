@@ -75,8 +75,15 @@ async function seed() {
         (engine_type, transmission, fuel_type, mileage, mileage_unit, 
         engine_size, horsepower, doors, is_turbo, cylinders, 
         manufacture_month, color, body_type, steering_wheel, drive_type,
-        has_catalyst, airbags_count, interior_material, interior_color)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) 
+        has_catalyst, airbags_count, interior_material, interior_color,
+        has_abs, has_traction_control, has_central_locking, has_alarm,
+        has_fog_lights, has_board_computer, has_air_conditioning, has_climate_control,
+        has_parking_control, has_rear_view_camera, has_electric_windows,
+        has_cruise_control, has_start_stop, has_sunroof, has_heated_seats,
+        has_seat_memory, has_navigation, has_aux, has_bluetooth,
+        has_multifunction_steering_wheel, has_hydraulics, has_alloy_wheels,
+        has_spare_tire, is_disability_adapted, has_technical_inspection)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43) 
         RETURNING id`,
         [
           car.specifications.engine_type,
@@ -97,7 +104,32 @@ async function seed() {
           car.specifications.has_catalyst !== undefined ? car.specifications.has_catalyst : true,
           car.specifications.airbags_count || 0,
           car.specifications.interior_material,
-          car.specifications.interior_color
+          car.specifications.interior_color,
+          car.specifications.has_abs || false,
+          car.specifications.has_traction_control || false,
+          car.specifications.has_central_locking || false,
+          car.specifications.has_alarm || false,
+          car.specifications.has_fog_lights || false,
+          car.specifications.has_board_computer || false,
+          car.specifications.has_air_conditioning || false,
+          car.specifications.has_climate_control || false,
+          car.specifications.has_parking_control || false,
+          car.specifications.has_rear_view_camera || false,
+          car.specifications.has_electric_windows || false,
+          car.specifications.has_cruise_control || false,
+          car.specifications.has_start_stop || false,
+          car.specifications.has_sunroof || false,
+          car.specifications.has_heated_seats || false,
+          car.specifications.has_seat_memory || false,
+          car.specifications.has_navigation || false,
+          car.specifications.has_aux || false,
+          car.specifications.has_bluetooth || false,
+          car.specifications.has_multifunction_steering_wheel || false,
+          car.specifications.has_hydraulics || false,
+          car.specifications.has_alloy_wheels || false,
+          car.specifications.has_spare_tire || false,
+          car.specifications.is_disability_adapted || false,
+          car.specifications.has_technical_inspection || false
         ]
       );
 

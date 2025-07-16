@@ -87,25 +87,31 @@ class CarCreate {
       
       // Handle features that come as an array of strings
       if (Array.isArray(carData.features)) {
-        specifications.has_board_computer = carData.features.includes('board_computer');
-        specifications.has_alarm = carData.features.includes('alarm');
-        specifications.has_air_conditioning = carData.features.includes('air_conditioning');
-        specifications.has_parking_control = carData.features.includes('parking_control');
-        specifications.has_rear_view_camera = carData.features.includes('rear_view_camera');
-        specifications.has_electric_windows = carData.features.includes('electric_windows');
-        specifications.has_climate_control = carData.features.includes('climate_control');
-        specifications.has_cruise_control = carData.features.includes('cruise_control');
-        specifications.has_start_stop = carData.features.includes('start_stop');
-        specifications.has_sunroof = carData.features.includes('sunroof');
-        specifications.has_seat_heating = carData.features.includes('seat_heating') || carData.features.includes('heated_seats');
-        specifications.has_abs = carData.features.includes('abs');
-        specifications.has_traction_control = carData.features.includes('traction_control');
-        specifications.has_central_locking = carData.features.includes('central_locking');
-        specifications.has_fog_lights = carData.features.includes('fog_lights');
-        specifications.has_navigation = carData.features.includes('navigation');
-        specifications.has_bluetooth = carData.features.includes('bluetooth');
-        specifications.has_multifunction_steering_wheel = carData.features.includes('multifunction_steering_wheel');
-        specifications.has_technical_inspection = carData.features.includes('technical_inspection');
+        specifications.has_board_computer = carData.features.includes('board_computer') || carData.features.includes('has_board_computer');
+        specifications.has_alarm = carData.features.includes('alarm') || carData.features.includes('has_alarm');
+        specifications.has_air_conditioning = carData.features.includes('air_conditioning') || carData.features.includes('has_air_conditioning');
+        specifications.has_parking_control = carData.features.includes('parking_control') || carData.features.includes('has_parking_control');
+        specifications.has_rear_view_camera = carData.features.includes('rear_view_camera') || carData.features.includes('has_rear_view_camera');
+        specifications.has_electric_windows = carData.features.includes('electric_windows') || carData.features.includes('has_electric_windows');
+        specifications.has_climate_control = carData.features.includes('climate_control') || carData.features.includes('has_climate_control');
+        specifications.has_cruise_control = carData.features.includes('cruise_control') || carData.features.includes('has_cruise_control');
+        specifications.has_start_stop = carData.features.includes('start_stop') || carData.features.includes('has_start_stop');
+        specifications.has_sunroof = carData.features.includes('sunroof') || carData.features.includes('has_sunroof');
+        specifications.has_heated_seats = carData.features.includes('seat_heating') || carData.features.includes('heated_seats') || carData.features.includes('has_heated_seats') || carData.features.includes('has_heated_seats');
+        specifications.has_seat_memory = carData.features.includes('seat_memory') || carData.features.includes('memory_seats') || carData.features.includes('has_seat_memory') || carData.features.includes(' has_heated_seats');
+        specifications.has_abs = carData.features.includes('abs') || carData.features.includes('has_abs');
+        specifications.has_traction_control = carData.features.includes('traction_control') || carData.features.includes('has_traction_control');
+        specifications.has_central_locking = carData.features.includes('central_locking') || carData.features.includes('has_central_locking');
+        specifications.has_fog_lights = carData.features.includes('fog_lights') || carData.features.includes('has_fog_lights');
+        specifications.has_navigation = carData.features.includes('navigation') || carData.features.includes('has_navigation');
+        specifications.has_aux = carData.features.includes('aux') || carData.features.includes('has_aux');
+        specifications.has_bluetooth = carData.features.includes('bluetooth') || carData.features.includes('has_bluetooth');
+        specifications.has_multifunction_steering_wheel = carData.features.includes('multifunction_steering_wheel') || carData.features.includes('has_multifunction_steering_wheel');
+        specifications.has_hydraulics = carData.features.includes('hydraulics') || carData.features.includes('has_hydraulics');
+        specifications.has_alloy_wheels = carData.features.includes('alloy_wheels') || carData.features.includes('has_alloy_wheels');
+        specifications.has_spare_tire = carData.features.includes('spare_tire') || carData.features.includes('has_spare_tire');
+        specifications.is_disability_adapted = carData.features.includes('disability_adapted') || carData.features.includes('has_disability_adapted') || carData.features.includes('is_disability_adapted');
+        specifications.has_technical_inspection = carData.features.includes('technical_inspection') || carData.features.includes('has_technical_inspection');
       }
       // Handle features that come as an object with boolean values
       else if (carData.features && typeof carData.features === 'object') {
@@ -119,14 +125,20 @@ class CarCreate {
         specifications.has_cruise_control = Boolean(carData.features.has_cruise_control);
         specifications.has_start_stop = Boolean(carData.features.has_start_stop);
         specifications.has_sunroof = Boolean(carData.features.has_sunroof);
-        specifications.has_seat_heating = Boolean(carData.features.has_seat_heating || carData.features.has_heated_seats);
+        specifications.has_heated_seats = Boolean(carData.features.has_heated_seats || carData.features.has_heated_seats);
+        specifications.has_seat_memory = Boolean(carData.features.has_seat_memory || carData.features. has_heated_seats);
         specifications.has_abs = Boolean(carData.features.has_abs);
         specifications.has_traction_control = Boolean(carData.features.has_traction_control);
         specifications.has_central_locking = Boolean(carData.features.has_central_locking);
         specifications.has_fog_lights = Boolean(carData.features.has_fog_lights);
         specifications.has_navigation = Boolean(carData.features.has_navigation);
+        specifications.has_aux = Boolean(carData.features.has_aux);
         specifications.has_bluetooth = Boolean(carData.features.has_bluetooth);
         specifications.has_multifunction_steering_wheel = Boolean(carData.features.has_multifunction_steering_wheel);
+        specifications.has_hydraulics = Boolean(carData.features.has_hydraulics);
+        specifications.has_alloy_wheels = Boolean(carData.features.has_alloy_wheels);
+        specifications.has_spare_tire = Boolean(carData.features.has_spare_tire);
+        specifications.is_disability_adapted = Boolean(carData.features.is_disability_adapted);
         specifications.has_technical_inspection = Boolean(carData.features.has_technical_inspection);
       }
       // Fall back to specifications object if features array/object isn't provided
@@ -141,14 +153,20 @@ class CarCreate {
         specifications.has_cruise_control = Boolean(carData.specifications?.has_cruise_control || carData.has_cruise_control);
         specifications.has_start_stop = Boolean(carData.specifications?.has_start_stop || carData.has_start_stop);
         specifications.has_sunroof = Boolean(carData.specifications?.has_sunroof || carData.has_sunroof);
-        specifications.has_seat_heating = Boolean(carData.specifications?.has_seat_heating || carData.has_seat_heating);
+        specifications.has_heated_seats = Boolean(carData.specifications?.has_heated_seats || carData.has_heated_seats);
+        specifications.has_seat_memory = Boolean(carData.specifications?.has_seat_memory || carData.has_seat_memory);
         specifications.has_abs = Boolean(carData.specifications?.has_abs || carData.has_abs);
         specifications.has_traction_control = Boolean(carData.specifications?.has_traction_control || carData.has_traction_control);
         specifications.has_central_locking = Boolean(carData.specifications?.has_central_locking || carData.has_central_locking);
         specifications.has_fog_lights = Boolean(carData.specifications?.has_fog_lights || carData.has_fog_lights);
         specifications.has_navigation = Boolean(carData.specifications?.has_navigation || carData.has_navigation);
+        specifications.has_aux = Boolean(carData.specifications?.has_aux || carData.has_aux);
         specifications.has_bluetooth = Boolean(carData.specifications?.has_bluetooth || carData.has_bluetooth);
         specifications.has_multifunction_steering_wheel = Boolean(carData.specifications?.has_multifunction_steering_wheel || carData.has_multifunction_steering_wheel);
+        specifications.has_hydraulics = Boolean(carData.specifications?.has_hydraulics || carData.has_hydraulics);
+        specifications.has_alloy_wheels = Boolean(carData.specifications?.has_alloy_wheels || carData.has_alloy_wheels);
+        specifications.has_spare_tire = Boolean(carData.specifications?.has_spare_tire || carData.has_spare_tire);
+        specifications.is_disability_adapted = Boolean(carData.specifications?.is_disability_adapted || carData.is_disability_adapted);
         specifications.has_technical_inspection = Boolean(carData.specifications?.has_technical_inspection || carData.has_technical_inspection);
       }
       
@@ -393,13 +411,20 @@ class CarCreate {
         Boolean(specifications.has_cruise_control),
         Boolean(specifications.has_start_stop),
         Boolean(specifications.has_sunroof),
-        Boolean(specifications.has_seat_heating),
+        Boolean(specifications.has_heated_seats),
+        Boolean(specifications.has_seat_memory),
         Boolean(specifications.has_abs),
         Boolean(specifications.has_traction_control),
         Boolean(specifications.has_central_locking),
         Boolean(specifications.has_fog_lights),
         Boolean(specifications.has_navigation),
+        Boolean(specifications.has_aux),
         Boolean(specifications.has_bluetooth),
+        Boolean(specifications.has_multifunction_steering_wheel),
+        Boolean(specifications.has_hydraulics),
+        Boolean(specifications.has_alloy_wheels),
+        Boolean(specifications.has_spare_tire),
+        Boolean(specifications.is_disability_adapted),
         Boolean(specifications.has_technical_inspection),
         specifications.clearance_status || 'not_cleared'
       ];
@@ -454,10 +479,11 @@ class CarCreate {
         has_board_computer, has_alarm, has_air_conditioning,
         has_parking_control, has_rear_view_camera, has_electric_windows,
         has_climate_control, has_cruise_control, has_start_stop,
-        has_sunroof, has_seat_heating,
+        has_sunroof, has_heated_seats, has_seat_memory,
         has_abs, has_traction_control, has_central_locking,
-        has_fog_lights, has_navigation, has_bluetooth,
-        has_technical_inspection, clearance_status)
+        has_fog_lights, has_navigation, has_aux, has_bluetooth,
+        has_multifunction_steering_wheel, has_hydraulics, has_alloy_wheels,
+        has_spare_tire, is_disability_adapted, has_technical_inspection, clearance_status)
         VALUES 
         ($1 /* engine_type */, 
          $2 /* transmission */, 
@@ -482,15 +508,22 @@ class CarCreate {
          $21 /* has_cruise_control */,
          $22 /* has_start_stop */,
          $23 /* has_sunroof */,
-         $24 /* has_seat_heating */,
-         $25 /* has_abs */,
-         $26 /* has_traction_control */,
-         $27 /* has_central_locking */,
-         $28 /* has_fog_lights */,
-         $29 /* has_navigation */,
-         $30 /* has_bluetooth */,
-         $31 /* has_technical_inspection */,
-         $32 /* clearance_status */)
+         $24 /* has_heated_seats */,
+         $25 /* has_seat_memory */,
+         $26 /* has_abs */,
+         $27 /* has_traction_control */,
+         $28 /* has_central_locking */,
+         $29 /* has_fog_lights */,
+         $30 /* has_navigation */,
+         $31 /* has_aux */,
+         $32 /* has_bluetooth */,
+         $33 /* has_multifunction_steering_wheel */,
+         $34 /* has_hydraulics */,
+         $35 /* has_alloy_wheels */,
+         $36 /* has_spare_tire */,
+         $37 /* is_disability_adapted */,
+         $38 /* has_technical_inspection */,
+         $39 /* clearance_status */)
         RETURNING id`,
         finalSpecParams
       );
