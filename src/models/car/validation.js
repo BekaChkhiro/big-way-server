@@ -109,14 +109,9 @@ class CarValidation {
       throw new Error('Specifications object is required');
     }
 
-    // Required fields
-    const requiredFields = ['transmission', 'fuel_type', 'engine_size', 'mileage'];
-    for (const field of requiredFields) {
-      if (!specs[field]) {
-        throw new Error(`${field} is required in specifications`);
-      }
-    }
-
+    // For updates, we don't require all fields to be present
+    // Only validate the fields that are provided
+    
     // Log the fuel type but don't validate against a predefined list
     if (specs.fuel_type) {
       console.log('Fuel type provided:', specs.fuel_type);
@@ -176,9 +171,8 @@ class CarValidation {
       console.log('Warning: Location object is missing, using default values');
       return {
         location_type: 'georgia',
-        is_transit: false,
+        is_in_transit: false,
         city: 'თბილისი',
-        state: null,
         country: 'საქართველო'
       };
     }
@@ -187,12 +181,11 @@ class CarValidation {
     const locationType = location.location_type || 'georgia';
     
     // Handle transit case
-    if (location.is_transit === true) {
+    if (location.is_in_transit === true) {
       return {
         location_type: 'transit',
-        is_transit: true,
+        is_in_transit: true,
         city: location.city || 'თბილისი',
-        state: location.state || null,
         country: location.country || 'საქართველო'
       };
     }
@@ -206,9 +199,8 @@ class CarValidation {
       console.log(`Warning: Invalid Georgian city: "${city}", falling back to თბილისი`);
       return {
         location_type: locationType,
-        is_transit: false,
+        is_in_transit: false,
         city: 'თბილისი',
-        state: location.state || null,
         country: 'საქართველო'
       };
     }
@@ -216,9 +208,8 @@ class CarValidation {
     // Return the validated location
     return {
       location_type: locationType,
-      is_transit: Boolean(location.is_transit),
+      is_in_transit: Boolean(location.is_in_transit),
       city: city,
-      state: location.state || null,
       country: country
     };
   }
@@ -228,6 +219,11 @@ class CarValidation {
       'SELECT seller_id FROM cars WHERE id = $1',
       [carId]
     );
+    
+    // Check if car exists
+    if (carCheck.rows.length === 0) {
+      throw new Error('Car not found');
+    }
     
     // Check if user is authorized to modify this car
     if (carCheck.rows[0].seller_id !== sellerId) {

@@ -3,14 +3,11 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
 const CarCreate = require('../models/car/create');
+const CarUpdate = require('../models/car/update');
 const pool = require('../../config/db.config');
 const { BRAND_MODELS } = require('../models/car/base');
 const authMiddleware = require('../middlewares/auth.middleware');
 const { upload, processAndUpload, setCacheHeaders } = require('../middlewares/upload.middleware');
-
-// Create uploads directory if it doesn't exist (for fallback)
-const uploadDir = path.join(__dirname, '../../uploads/cars');
-fs.mkdir(uploadDir, { recursive: true }).catch(console.error);
 
 // Use the upload middleware configured for AWS S3
 const carUpload = upload;
@@ -312,8 +309,12 @@ router.post('/', authMiddleware, carUpload.array('images', 10), async (req, res)
         console.log('Images processed and uploaded to S3:', processedImages);
       } catch (uploadError) {
         console.error('Error uploading images to S3:', uploadError);
-        // Continue with local storage as fallback
-        console.log('Using local storage as fallback');
+        // No fallback to local storage - S3 is required
+        return res.status(500).json({
+          success: false,
+          error: 'Image upload failed. S3 storage is required.',
+          details: uploadError.message
+        });
       }
     }
     
@@ -365,13 +366,11 @@ router.post('/:id/images', authMiddleware, carUpload.array('images'), async (req
       }));
     } catch (uploadError) {
       console.error('Error uploading images to S3:', uploadError);
-      // Fallback to local storage
-      images = req.files.map(file => ({
-        url: `/uploads/cars/${file.filename}`,
-        thumbnail_url: `/uploads/cars/${file.filename}`,
-        medium_url: `/uploads/cars/${file.filename}`,
-        large_url: `/uploads/cars/${file.filename}`
-      }));
+      // No fallback to local storage - S3 is required
+      return res.status(500).json({
+        success: false,
+        error: 'Image upload failed. S3 storage is required.'
+      });
     }
 
     // Add images to the car
@@ -400,12 +399,44 @@ router.put('/:id', authMiddleware, carUpload.array('images', 10), async (req, re
     console.log('მანქანის ID:', id);
     console.log('მომხმარებლის ID:', req.user.id);
     console.log('მოთხოვნის სხეული:', JSON.stringify(req.body, null, 2));
+    
+    // Parse JSON stringified fields from FormData
+    const updateData = { ...req.body };
+    
+    // Parse specifications if it's a string
+    if (typeof updateData.specifications === 'string') {
+      try {
+        updateData.specifications = JSON.parse(updateData.specifications);
+      } catch (e) {
+        console.error('Error parsing specifications:', e);
+      }
+    }
+    
+    // Parse location if it's a string
+    if (typeof updateData.location === 'string') {
+      try {
+        updateData.location = JSON.parse(updateData.location);
+      } catch (e) {
+        console.error('Error parsing location:', e);
+      }
+    }
+    
+    // Parse features if it's a string
+    if (typeof updateData.features === 'string') {
+      try {
+        updateData.features = JSON.parse(updateData.features);
+      } catch (e) {
+        console.error('Error parsing features:', e);
+      }
+    }
+    
+    console.log('პარსირებული მონაცემები:', JSON.stringify(updateData, null, 2));
     console.log('ავტორის ინფორმაცია:', {
-      author_name: req.body.author_name,
-      author_phone: req.body.author_phone
+      author_name: updateData.author_name,
+      author_phone: updateData.author_phone
     });
     
-    const car = await CarCreate.update(parseInt(id), req.body, req.user.id);
+    const car = await CarUpdate.update(parseInt(id), updateData, req.user.id);
     res.status(200).json({
       success: true,
       data: car
@@ -423,7 +454,7 @@ router.put('/:id', authMiddleware, carUpload.array('images', 10), async (req, re
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    await CarCreate.delete(parseInt(id), req.user.id);
+    await CarUpdate.delete(parseInt(id), req.user.id);
     res.status(200).json({
       success: true,
       message: 'Car deleted successfully'

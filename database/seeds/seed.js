@@ -103,9 +103,9 @@ async function seed() {
 
       // Insert location
       const locationResult = await client.query(
-        `INSERT INTO locations (city, state, country)
-        VALUES ($1, $2, $3) RETURNING id`,
-        [car.location.city, car.location.state, car.location.country]
+        `INSERT INTO locations (city, country)
+        VALUES ($1, $2) RETURNING id`,
+        [car.location.city,  car.location.country]
       );
 
       // Insert car

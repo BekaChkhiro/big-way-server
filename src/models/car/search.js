@@ -101,7 +101,7 @@ class CarSearch {
               l.city,
               l.country,
               l.location_type,
-              l.is_transit
+              l.is_in_transit
             FROM locations l 
             WHERE l.id = c.location_id
           ) loc
