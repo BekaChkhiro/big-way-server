@@ -2,7 +2,7 @@
  * Simple script to insert test car parts with hardcoded IDs
  */
 
-const config = require('../../config/db.config');
+const { pg: config } = require('../../config/db.config');
 
 async function insertTestParts() {
   const client = await config.connect();

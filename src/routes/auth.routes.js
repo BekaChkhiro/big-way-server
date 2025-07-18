@@ -2,13 +2,40 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const authMiddleware = require('../middlewares/auth.middleware');
+const { upload, processAndUpload } = require('../middlewares/upload.middleware');
 const User = require('../models/user');
-const pool = require('../../config/db.config');
+const { pg: pool } = require('../../config/db.config');
 
 // Registration route
-router.post('/register', async (req, res) => {
+router.post('/register', upload.single('logo'), async (req, res) => {
   try {
-    const { user, token, refreshToken } = await User.register(req.body);
+    // Handle logo upload if provided
+    let logoUrl = null;
+    if (req.file && req.body.isDealer === 'true') {
+      console.log('Processing dealer logo upload during registration');
+      try {
+        const processedImages = await processAndUpload([req.file]);
+        logoUrl = processedImages[0].original;
+        console.log('Logo uploaded successfully:', logoUrl);
+      } catch (uploadError) {
+        console.error('Logo upload failed during registration:', uploadError);
+        return res.status(400).json({ 
+          message: 'Logo upload failed. Please try again.',
+          error: uploadError.message 
+        });
+      }
+    }
+
+    // Add logo_url to dealer data if available
+    const registrationData = { ...req.body };
+    if (logoUrl && registrationData.dealerData) {
+      if (typeof registrationData.dealerData === 'string') {
+        registrationData.dealerData = JSON.parse(registrationData.dealerData);
+      }
+      registrationData.dealerData.logo_url = logoUrl;
+    }
+
+    const { user, token, refreshToken } = await User.register(registrationData);
     res.status(201).json({ 
       user, 
       token, 

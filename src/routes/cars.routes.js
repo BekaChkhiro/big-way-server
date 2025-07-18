@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const CarCreate = require('../models/car/create');
 const CarUpdate = require('../models/car/update');
-const pool = require('../../config/db.config');
+const { pg: pool } = require('../../config/db.config');
 const { BRAND_MODELS } = require('../models/car/base');
 const authMiddleware = require('../middlewares/auth.middleware');
 const { upload, processAndUpload, setCacheHeaders } = require('../middlewares/upload.middleware');
@@ -494,6 +494,7 @@ router.get('/', async (req, res) => {
       interiorColor,
       airbags,
       location,
+      seller_id,
       sortBy = 'created_at',
       order = 'DESC',
       page = 1,
@@ -502,6 +503,7 @@ router.get('/', async (req, res) => {
 
     // Log the filter parameters
     console.log('Fetching cars with filters:', JSON.stringify(req.query));
+    console.log('Seller ID received:', seller_id);
     
     // Build the query with filters
     let queryParams = [];
@@ -602,11 +604,19 @@ router.get('/', async (req, res) => {
       addFilter('LOWER(loc.city)', location.toLowerCase(), 'LIKE');
     }
     
+    if (seller_id) {
+      console.log('Adding seller_id filter:', seller_id, 'Type:', typeof seller_id);
+      addFilter('c.seller_id', parseInt(seller_id));
+    }
+    
     // Always include the status = 'available' condition
     conditions.push(`c.status = 'available'`);
     
     // Build the WHERE clause
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
+    
+    console.log('WHERE clause:', whereClause);
+    console.log('Query params:', queryParams);
     
     // Validate sortBy to prevent SQL injection
     const validSortColumns = [

@@ -1,4 +1,4 @@
-const pool = require('../../../config/db.config');
+const { pg: pool } = require('../../../config/db.config');
 const PartValidation = require('./validation');
 
 class PartUpdate {

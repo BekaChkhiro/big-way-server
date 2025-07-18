@@ -1,5 +1,5 @@
 const { CarModel } = require('../models/car/base');
-const pool = require('../../config/db.config');
+const { pg: pool } = require('../../config/db.config');
 
 /**
  * Controller for handling admin VIP listings operations

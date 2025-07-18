@@ -3,7 +3,7 @@
  */
 const fs = require('fs').promises;
 const path = require('path');
-const pool = require('../../config/db.config');
+const { pg: pool } = require('../../config/db.config');
 
 async function runMigration() {
   try {

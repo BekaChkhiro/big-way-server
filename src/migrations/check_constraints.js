@@ -1,7 +1,7 @@
 /**
  * Script to check all constraints on the specifications table
  */
-const pool = require('../../config/db.config');
+const { pg: pool } = require('../../config/db.config');
 
 async function checkConstraints() {
   const client = await pool.connect();
