@@ -1,6 +1,6 @@
 const DealerProfile = require('./dealer.model');
-const { createDealerProfile } = require('./create');
-const { updateDealerProfile } = require('./update');
+const { createDealerProfile, createDealerProfileAdmin } = require('./create');
+const { updateDealerProfile, updateDealerProfileAdmin, deleteDealerProfile } = require('./update');
 const {
   getDealerProfile,
   getDealerByCompanyName,
@@ -11,7 +11,10 @@ const {
 module.exports = {
   DealerProfile,
   createDealerProfile,
+  createDealerProfileAdmin,
   updateDealerProfile,
+  updateDealerProfileAdmin,
+  deleteDealerProfile,
   getDealerProfile,
   getDealerByCompanyName,
   getAllDealers,

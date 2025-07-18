@@ -574,4 +574,44 @@ router.post('/facebook-data-deletion', async (req, res) => {
   }
 });
 
+// Admin only: Delete user by ID
+router.delete('/users/:id', authMiddleware, async (req, res) => {
+  try {
+    // Check if the current user has admin privileges
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden: Admin access required' });
+    }
+    
+    const userId = parseInt(req.params.id);
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+    
+    // Log the deletion attempt
+    console.log(`Admin user ${req.user.id} attempting to delete user ${userId}`);
+    
+    // Call the UserModel.delete method
+    const result = await User.delete(userId);
+    
+    if (result.success) {
+      return res.json({ 
+        message: `User ${userId} successfully deleted`, 
+        deletedId: result.deletedId 
+      });
+    } else {
+      // Return appropriate status code based on the error
+      if (result.message === 'User not found') {
+        return res.status(404).json({ message: result.message });
+      } else if (result.message === 'Cannot delete admin user') {
+        return res.status(403).json({ message: result.message });
+      } else {
+        return res.status(400).json({ message: result.message });
+      }
+    }
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 module.exports = router;

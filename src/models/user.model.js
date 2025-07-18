@@ -93,6 +93,38 @@ class UserModel {
     const query = 'DELETE FROM users WHERE role != \'admin\'';
     await pool.query(query);
   }
+
+  static async delete(id) {
+    try {
+      // First, check if the user exists and is not an admin
+      const checkQuery = 'SELECT role FROM users WHERE id = $1';
+      const checkResult = await pool.query(checkQuery, [id]);
+      
+      if (checkResult.rows.length === 0) {
+        // User doesn't exist
+        return { success: false, message: 'User not found' };
+      }
+      
+      const userRole = checkResult.rows[0].role;
+      if (userRole === 'admin') {
+        // Prevent admin deletion for safety
+        return { success: false, message: 'Cannot delete admin user' };
+      }
+      
+      // Delete the user
+      const deleteQuery = 'DELETE FROM users WHERE id = $1 RETURNING id';
+      const result = await pool.query(deleteQuery, [id]);
+      
+      if (result.rows.length > 0) {
+        return { success: true, deletedId: result.rows[0].id };
+      } else {
+        return { success: false, message: 'User deletion failed' };
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      return { success: false, message: error.message || 'Database error' };
+    }
+  }
 }
 
 const User = require('./user');

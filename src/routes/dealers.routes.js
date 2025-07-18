@@ -3,10 +3,18 @@ const router = express.Router();
 const { pg: pool } = require('../../config/db.config');
 const authMiddleware = require('../middlewares/auth.middleware');
 const { upload, processAndUpload } = require('../middlewares/upload.middleware');
+const { USER_ROLES } = require('../constants/roles');
 
-// Get all dealers
-router.get('/', async (req, res) => {
+// Get all dealers (Admin only)
+router.get('/', authMiddleware, async (req, res) => {
   try {
+    // Check if user is admin
+    if (req.user.role !== USER_ROLES.ADMIN) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'წვდომა აკრძალულია' 
+      });
+    }
     const { page = 1, limit = 10, search = '', sortBy = 'created_at', sortOrder = 'DESC' } = req.query;
     const offset = (page - 1) * limit;
 
@@ -14,10 +22,14 @@ router.get('/', async (req, res) => {
       SELECT 
         dp.*,
         u.id as user_id,
-        u.username as user_name,
-        u.email as user_email,
-        u.phone as user_phone,
-        u.role as user_role,
+        u.username,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.role,
+        u.gender,
+        u.created_at as user_created_at,
         COUNT(c.id) as car_count
       FROM dealer_profiles dp
       JOIN users u ON dp.user_id = u.id
@@ -34,10 +46,13 @@ router.get('/', async (req, res) => {
       paramCount++;
     }
 
-    query += ` GROUP BY dp.id, u.id, u.username, u.email, u.phone, u.role`;
+    query += ` GROUP BY dp.id, u.id, u.username, u.email, u.first_name, u.last_name, u.phone, u.role, u.gender, u.created_at`;
     query += ` ORDER BY ${sortBy} ${sortOrder}`;
     query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
     queryParams.push(limit, offset);
+
+    console.log('Admin dealers query:', query);
+    console.log('Query params:', queryParams);
 
     const result = await pool.query(query, queryParams);
 
@@ -50,8 +65,12 @@ router.get('/', async (req, res) => {
     `;
     const countResult = await pool.query(countQuery, search ? [`%${search}%`] : []);
 
+    console.log('Dealers found:', result.rows.length);
+    console.log('Total count:', countResult.rows[0].total);
+
     res.json({
-      dealers: result.rows.map(row => ({
+      success: true,
+      data: result.rows.map(row => ({
         id: row.id,
         user_id: row.user_id,
         company_name: row.company_name,
@@ -64,25 +83,131 @@ router.get('/', async (req, res) => {
         updated_at: row.updated_at,
         user: {
           id: row.user_id,
-          name: row.user_name,
-          email: row.user_email,
-          phone: row.user_phone,
-          role: row.user_role
+          username: row.username,
+          email: row.email,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          phone: row.phone,
+          role: row.role,
+          gender: row.gender,
+          created_at: row.user_created_at
         },
         car_count: parseInt(row.car_count) || 0
       })),
-      total: parseInt(countResult.rows[0].total),
-      page: parseInt(page),
-      totalPages: Math.ceil(countResult.rows[0].total / limit)
+      meta: {
+        total: parseInt(countResult.rows[0].total),
+        page: parseInt(page),
+        totalPages: Math.ceil(countResult.rows[0].total / limit)
+      }
     });
   } catch (error) {
     console.error('Error fetching dealers:', error);
-    res.status(500).json({ message: 'Failed to fetch dealers' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch dealers' 
+    });
   }
 });
 
-// Get dealer by user ID
-router.get('/:userId', async (req, res) => {
+// Get all dealers (Public access)
+router.get('/public', async (req, res) => {
+  try {
+    console.log('Public dealers endpoint hit with query:', req.query);
+    const { page = 1, limit = 10, search = '', sortBy = 'created_at', sortOrder = 'DESC' } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = `
+      SELECT 
+        dp.*,
+        u.id as user_id,
+        u.username,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.role,
+        u.gender,
+        u.created_at as user_created_at,
+        COUNT(c.id) as car_count
+      FROM dealer_profiles dp
+      JOIN users u ON dp.user_id = u.id
+      LEFT JOIN cars c ON c.seller_id = u.id
+      WHERE 1=1
+    `;
+
+    const queryParams = [];
+    let paramCount = 1;
+
+    if (search) {
+      query += ` AND (dp.company_name ILIKE $${paramCount} OR u.username ILIKE $${paramCount})`;
+      queryParams.push(`%${search}%`);
+      paramCount++;
+    }
+
+    query += ` GROUP BY dp.id, u.id, u.username, u.email, u.first_name, u.last_name, u.phone, u.role, u.gender, u.created_at`;
+    query += ` ORDER BY ${sortBy} ${sortOrder}`;
+    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    queryParams.push(limit, offset);
+
+    console.log('Public dealers query:', query);
+    console.log('Public dealers params:', queryParams);
+    
+    const result = await pool.query(query, queryParams);
+    console.log('Public dealers result count:', result.rows.length);
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(DISTINCT dp.id) as total
+      FROM dealer_profiles dp
+      JOIN users u ON dp.user_id = u.id
+      WHERE 1=1 ${search ? `AND (dp.company_name ILIKE $1 OR u.username ILIKE $1)` : ''}
+    `;
+    const countResult = await pool.query(countQuery, search ? [`%${search}%`] : []);
+    console.log('Public dealers total count:', countResult.rows[0].total);
+
+    res.json({
+      success: true,
+      data: result.rows.map(row => ({
+        id: row.id,
+        user_id: row.user_id,
+        company_name: row.company_name,
+        logo_url: row.logo_url,
+        established_year: row.established_year,
+        website_url: row.website_url,
+        social_media_url: row.social_media_url,
+        address: row.address,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        user: {
+          id: row.user_id,
+          username: row.username,
+          email: row.email,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          phone: row.phone,
+          role: row.role,
+          gender: row.gender,
+          created_at: row.user_created_at
+        },
+        car_count: parseInt(row.car_count) || 0
+      })),
+      meta: {
+        total: parseInt(countResult.rows[0].total),
+        page: parseInt(page),
+        totalPages: Math.ceil(countResult.rows[0].total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching dealers:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch dealers' 
+    });
+  }
+});
+
+// Get dealer by user ID (Public access)
+router.get('/public/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -90,48 +215,65 @@ router.get('/:userId', async (req, res) => {
       SELECT 
         dp.*,
         u.id as user_id,
-        u.username as user_name,
-        u.email as user_email,
-        u.phone as user_phone,
-        u.role as user_role,
+        u.username,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.role,
+        u.gender,
+        u.created_at as user_created_at,
         COUNT(c.id) as car_count
       FROM dealer_profiles dp
       JOIN users u ON dp.user_id = u.id
       LEFT JOIN cars c ON c.seller_id = u.id
       WHERE u.id = $1
-      GROUP BY dp.id, u.id, u.username, u.email, u.phone, u.role
+      GROUP BY dp.id, u.id, u.username, u.email, u.first_name, u.last_name, u.phone, u.role, u.gender, u.created_at
     `;
     
     const result = await pool.query(query, [userId]);
     
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Dealer not found' });
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Dealer not found' 
+      });
     }
     
     const row = result.rows[0];
     res.json({
-      id: row.id,
-      user_id: row.user_id,
-      company_name: row.company_name,
-      logo_url: row.logo_url,
-      established_year: row.established_year,
-      website_url: row.website_url,
-      social_media_url: row.social_media_url,
-      address: row.address,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      user: {
-        id: row.user_id,
-        name: row.user_name,
-        email: row.user_email,
-        phone: row.user_phone,
-        role: row.user_role
-      },
-      car_count: parseInt(row.car_count) || 0
+      success: true,
+      data: {
+        id: row.id,
+        user_id: row.user_id,
+        company_name: row.company_name,
+        logo_url: row.logo_url,
+        established_year: row.established_year,
+        website_url: row.website_url,
+        social_media_url: row.social_media_url,
+        address: row.address,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        user: {
+          id: row.user_id,
+          username: row.username,
+          email: row.email,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          phone: row.phone,
+          role: row.role,
+          gender: row.gender,
+          created_at: row.user_created_at
+        },
+        car_count: parseInt(row.car_count) || 0
+      }
     });
   } catch (error) {
     console.error('Error fetching dealer:', error);
-    res.status(500).json({ message: 'Failed to fetch dealer' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch dealer' 
+    });
   }
 });
 
