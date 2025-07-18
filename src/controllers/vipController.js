@@ -1,5 +1,5 @@
 const { CarModel, VIP_STATUS_TYPES } = require('../models/car/base');
-const pool = require('../../config/db.config');
+const { pg: pool } = require('../../config/db.config');
 
 /**
  * Controller for handling VIP status related operations

@@ -9,7 +9,6 @@ console.log('- GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Defin
 
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const passport = require('passport');
 const swaggerUi = require('swagger-ui-express');
 const winston = require('winston');
@@ -28,8 +27,10 @@ const adminVipRoutes = require('./routes/adminVip.routes');
 const userRoutes = require('./routes/user.routes');
 const vipPricingRoutes = require('./routes/vipPricingRoutes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const dealersRoutes = require('./routes/dealers.routes');
+const autosalonsRoutes = require('./routes/autosalons.routes');
 const specs = require('./docs/swagger');
-const pool = require('../config/db.config');
+const { pg: pool } = require('../config/db.config');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -106,6 +107,8 @@ app.use('/api/admin', adminVipRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api', vipPricingRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/dealers', dealersRoutes);
+app.use('/api/autosalons', autosalonsRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Big Way API' });
@@ -121,26 +124,18 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   const PORT = process.env.PORT || 5000; // Changed from 5000 to 5001 to avoid conflict
   
-  // Test database connection before starting server
-  pool.query('SELECT NOW()')
-    .then(() => {
-      logger.info('Database connection successful');
-      
-      app.listen(PORT, () => {
-        logger.info(`Server is running on port ${PORT}`);
-      }).on('error', (error) => {
-        if (error.code === 'EADDRINUSE') {
-          logger.error(`Port ${PORT} is already in use. Please free up the port and try again.`);
-        } else {
-          logger.error('Error starting server:', error);
-        }
-        process.exit(1);
-      });
-    })
-    .catch(err => {
-      logger.error('Database connection failed:', err);
-      process.exit(1);
-    });
+  // Start the server without waiting for database connection
+  // The database connection is already tested in db.config.js
+  app.listen(PORT, () => {
+    logger.info(`Server is running on port ${PORT}`);
+  }).on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      logger.error(`Port ${PORT} is already in use. Please free up the port and try again.`);
+    } else {
+      logger.error('Error starting server:', error);
+    }
+    process.exit(1);
+  });
 }
 
 module.exports = app;

@@ -1,5 +1,5 @@
 const { PartModel, PartCreate, PartSearch, PartUpdate } = require('../../models/part');
-const pool = require('../../../config/db.config');
+const { pg: pool } = require('../../../config/db.config');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;

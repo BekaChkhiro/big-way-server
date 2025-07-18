@@ -1,4 +1,4 @@
-const pool = require('../../../config/db.config');
+const { pg: pool } = require('../../../config/db.config');
 const UserModel = require('./base');
 
 class UserUpdate {

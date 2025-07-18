@@ -1,4 +1,4 @@
-const pool = require('../../../config/db.config');
+const { pg: pool } = require('../../../config/db.config');
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../../../config/jwt.config');
 
@@ -36,8 +36,7 @@ class UserModel {
     try {
       // First try with specific fields instead of SELECT *
       const query = `
-        SELECT id, username, email, password, first_name, last_name, age, phone, role, created_at, 
-               reset_token, reset_token_expires
+        SELECT id, username, email, password, first_name, last_name, age, phone, role, created_at
         FROM users 
         WHERE email = $1
       `;
@@ -49,8 +48,7 @@ class UserModel {
       // If that fails, try with minimal fields
       try {
         const minimalQuery = `
-          SELECT id, username, email, password, role, created_at, 
-                 reset_token, reset_token_expires
+          SELECT id, username, email, password, role, created_at
           FROM users 
           WHERE email = $1
         `;

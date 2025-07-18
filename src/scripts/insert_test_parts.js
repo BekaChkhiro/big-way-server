@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const config = require('../../config/db.config');
+const { pg: config } = require('../../config/db.config');
 
 // Read SQL file content
 const sqlFilePath = path.join(__dirname, 'test_parts_data.sql');

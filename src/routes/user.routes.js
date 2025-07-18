@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../../config/db.config');
+const { pg: pool } = require('../../config/db.config');
 const authMiddleware = require('../middlewares/auth.middleware');
 
 // Complete user profile

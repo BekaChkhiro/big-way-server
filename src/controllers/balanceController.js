@@ -1,4 +1,4 @@
-const pool = require('../../config/db.config');
+const { pg: pool } = require('../../config/db.config');
 const { createPaymentSession, verifyPayment } = require('../utils/flittPayment');
 const bogPaymentService = require('../services/bogPaymentService');
 const crypto = require('crypto');

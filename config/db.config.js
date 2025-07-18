@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { Sequelize } = require('sequelize');
 
 let pool;
 
@@ -54,4 +55,71 @@ function getPool() {
   return pool;
 }
 
-module.exports = getPool();
+// Create a Sequelize instance using the same database connection parameters
+const sequelize = process.env.DATABASE_URL
+  ? new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      },
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      logging: false,
+      pool: {
+        max: 20,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      }
+    })
+  : new Sequelize(
+      process.env.NODE_ENV === 'test' ? 'big_way_test_db' : 'big_way_db',
+      process.env.DB_USER || 'postgres',
+      process.env.DB_PASSWORD || 'Lumia635-',
+      {
+        host: process.env.DB_HOST || 'localhost',
+        port: process.env.DB_PORT || 5432,
+        dialect: 'postgres',
+        logging: false,
+        pool: {
+          max: 20,
+          min: 0,
+          acquire: 30000,
+          idle: 10000
+        }
+      }
+    );
+
+// Test the Sequelize connection
+async function testSequelizeConnection() {
+  try {
+    await sequelize.authenticate();
+    console.log('Sequelize connection has been established successfully.');
+  } catch (error) {
+    console.error('Unable to connect to the database with Sequelize:', error);
+  }
+}
+
+testSequelizeConnection();
+
+// Initialize the pool
+const pgPool = getPool();
+
+// Test the pool connection
+pgPool.query('SELECT NOW()', (err, result) => {
+  if (err) {
+    console.error('Error connecting to PostgreSQL:', err);
+  } else {
+    console.log('PostgreSQL pool connected successfully');
+  }
+});
+
+module.exports = {
+  pg: pgPool,
+  sequelize
+};

@@ -1,4 +1,4 @@
-const pool = require('../../../config/db.config');
+const { pg: pool } = require('../../../config/db.config');
 
 class CarSearch {
   static async findAll({ 
@@ -56,6 +56,11 @@ class CarSearch {
     if (filters.location) {
       filterConditions.push(`(l.city ILIKE $${paramCounter} OR l.country ILIKE $${paramCounter})`);
       params.push(`%${filters.location}%`);
+      paramCounter++;
+    }
+    if (filters.seller_id) {
+      filterConditions.push(`c.seller_id = $${paramCounter}`);
+      params.push(filters.seller_id);
       paramCounter++;
     }
     const whereClause = filterConditions.length > 0 
@@ -169,6 +174,7 @@ class CarSearch {
     priceMax,
     specifications = {},
     location,
+    sellerId,
     page = 1,
     limit = 10,
     sort = 'created_at',
@@ -283,6 +289,12 @@ class CarSearch {
         l.state ILIKE $${paramCounter} OR 
         l.country ILIKE $${paramCounter}
       )`);
+      paramCounter++;
+    }
+
+    if (sellerId) {
+      values.push(sellerId);
+      conditions.push(`c.seller_id = $${paramCounter}`);
       paramCounter++;
     }
 
