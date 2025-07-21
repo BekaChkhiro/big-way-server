@@ -876,7 +876,7 @@ router.get('/:id', async (req, res) => {
     const carId = req.params.id;
     console.log('Fetching car with ID:', carId);
     
-    // Query to get a single car with its related data
+    // Query to get a single car with its related data including seller info
     const carQuery = `
       SELECT 
         c.*,
@@ -885,12 +885,37 @@ router.get('/:id', async (req, res) => {
         l.city, l.country,
         s.*,
         c.author_name, 
-        c.author_phone
+        c.author_phone,
+        u.role as seller_role,
+        u.first_name as seller_first_name,
+        u.last_name as seller_last_name,
+        u.phone as seller_phone,
+        -- Dealer profile data
+        dp.id as dealer_profile_id,
+        dp.company_name as dealer_company_name,
+        dp.logo_url as dealer_logo_url,
+        dp.established_year as dealer_established_year,
+        dp.website_url as dealer_website_url,
+        dp.address as dealer_address,
+        dp.created_at as dealer_created_at,
+        -- Autosalon profile data  
+        ap.id as autosalon_profile_id,
+        ap.company_name as autosalon_company_name,
+        ap.logo_url as autosalon_logo_url,
+        ap.established_year as autosalon_established_year,
+        ap.website_url as autosalon_website_url,
+        ap.address as autosalon_address,
+        ap.created_at as autosalon_created_at,
+        -- Car counts
+        (SELECT COUNT(*) FROM cars WHERE seller_id = u.id) as seller_car_count
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
       LEFT JOIN locations l ON c.location_id = l.id
       LEFT JOIN specifications s ON c.specification_id = s.id
+      LEFT JOIN users u ON c.seller_id = u.id
+      LEFT JOIN dealer_profiles dp ON u.id = dp.user_id
+      LEFT JOIN autosalon_profiles ap ON u.id = ap.user_id
       WHERE c.id = $1
     `;
     
@@ -1024,7 +1049,45 @@ router.get('/:id', async (req, res) => {
         medium_url: img.medium_url,
         large_url: img.large_url,
         is_primary: img.is_primary
-      }))
+      })),
+      // Seller information
+      seller_type: car.seller_role === 'dealer' ? 'dealer' : car.seller_role === 'autosalon' ? 'autosalon' : 'user',
+      dealer: car.dealer_profile_id ? {
+        id: car.dealer_profile_id,
+        user_id: car.seller_id,
+        company_name: car.dealer_company_name,
+        logo_url: car.dealer_logo_url,
+        established_year: car.dealer_established_year,
+        website_url: car.dealer_website_url,
+        address: car.dealer_address,
+        created_at: car.dealer_created_at,
+        car_count: parseInt(car.seller_car_count) || 0,
+        user: {
+          id: car.seller_id,
+          first_name: car.seller_first_name,
+          last_name: car.seller_last_name,
+          phone: car.seller_phone,
+          role: car.seller_role
+        }
+      } : null,
+      autosalon: car.autosalon_profile_id ? {
+        id: car.autosalon_profile_id,
+        user_id: car.seller_id,
+        company_name: car.autosalon_company_name,
+        logo_url: car.autosalon_logo_url,
+        established_year: car.autosalon_established_year,
+        website_url: car.autosalon_website_url,
+        address: car.autosalon_address,
+        created_at: car.autosalon_created_at,
+        car_count: parseInt(car.seller_car_count) || 0,
+        user: {
+          id: car.seller_id,
+          first_name: car.seller_first_name,
+          last_name: car.seller_last_name,
+          phone: car.seller_phone,
+          role: car.seller_role
+        }
+      } : null
     };
     
     console.log(`Successfully retrieved car with ID ${carId}`);
