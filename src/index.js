@@ -31,6 +31,7 @@ const dealersRoutes = require('./routes/dealers.routes');
 const autosalonsRoutes = require('./routes/autosalons.routes');
 const specs = require('./docs/swagger');
 const { pg: pool } = require('../config/db.config');
+const VipPricing = require('./models/VipPricing');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -120,9 +121,22 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
+// Initialize database tables
+const initializeDatabase = async () => {
+  try {
+    await VipPricing.createTableIfNotExists();
+    logger.info('Database tables initialized successfully');
+  } catch (error) {
+    logger.error('Error initializing database tables:', error);
+  }
+};
+
 // Only start the server if this file is run directly
 if (require.main === module) {
   const PORT = process.env.PORT || 5000; // Changed from 5000 to 5001 to avoid conflict
+  
+  // Initialize database tables before starting server
+  initializeDatabase();
   
   // Start the server without waiting for database connection
   // The database connection is already tested in db.config.js
