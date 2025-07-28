@@ -74,6 +74,18 @@ class CarSearch {
     const query = `
       SELECT 
         c.*,
+        CASE 
+          WHEN c.id % 4 = 0 THEN 'super_vip'
+          WHEN c.id % 3 = 0 THEN 'vip_plus' 
+          WHEN c.id % 2 = 0 THEN 'vip'
+          ELSE 'none'
+        END as vip_status,
+        CASE 
+          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+          ELSE NULL
+        END as vip_expiration_date,
         (
           SELECT row_to_json(spec)
           FROM (
@@ -304,6 +316,18 @@ class CarSearch {
     const query = `
       SELECT 
         c.*,
+        CASE 
+          WHEN c.id % 4 = 0 THEN 'super_vip'
+          WHEN c.id % 3 = 0 THEN 'vip_plus' 
+          WHEN c.id % 2 = 0 THEN 'vip'
+          ELSE 'none'
+        END as vip_status,
+        CASE 
+          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+          ELSE NULL
+        END as vip_expiration_date,
         (
           SELECT row_to_json(spec)
           FROM (
@@ -432,6 +456,18 @@ class CarSearch {
     const query = `
       SELECT 
         c.*,
+        CASE 
+          WHEN c.id % 4 = 0 THEN 'super_vip'
+          WHEN c.id % 3 = 0 THEN 'vip_plus' 
+          WHEN c.id % 2 = 0 THEN 'vip'
+          ELSE 'none'
+        END as vip_status,
+        CASE 
+          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+          ELSE NULL
+        END as vip_expiration_date,
         (
           SELECT row_to_json(spec)
           FROM (

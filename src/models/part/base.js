@@ -3,11 +3,22 @@ const { pg: pool } = require('../../../config/db.config');
 // Valid part conditions
 const VALID_CONDITIONS = ['new', 'used'];
 
+// VIP status types
+const VIP_STATUS_TYPES = ['none', 'vip', 'vip_plus', 'super_vip'];
+
 class PartModel {
   static async findById(id) {
     const query = `
       SELECT 
         p.*,
+        COALESCE(p.vip_status, 'none')::text as vip_status,
+        p.vip_expiration_date AT TIME ZONE 'UTC' as vip_expiration_date,
+        CASE 
+          WHEN p.vip_status IS NOT NULL AND p.vip_status != 'none' 
+               AND p.vip_expiration_date > NOW() 
+          THEN true 
+          ELSE false 
+        END as is_vip_active,
         b.name as brand,
         pc.name as category,
         cm.name as model,
@@ -71,6 +82,14 @@ class PartModel {
     const query = `
       SELECT 
         p.*,
+        COALESCE(p.vip_status, 'none')::text as vip_status,
+        p.vip_expiration_date AT TIME ZONE 'UTC' as vip_expiration_date,
+        CASE 
+          WHEN p.vip_status IS NOT NULL AND p.vip_status != 'none' 
+               AND p.vip_expiration_date > NOW() 
+          THEN true 
+          ELSE false 
+        END as is_vip_active,
         b.name as brand,
         pc.name as category,
         cm.name as model,
@@ -92,10 +111,114 @@ class PartModel {
       LEFT JOIN brands b ON p.brand_id = b.id
       LEFT JOIN part_categories pc ON p.category_id = pc.id
       LEFT JOIN car_models cm ON p.model_id = cm.id
-      ORDER BY p.created_at DESC
+      ORDER BY 
+        CASE 
+          WHEN p.vip_status = 'super_vip' AND p.vip_expiration_date > NOW() THEN 1
+          WHEN p.vip_status = 'vip_plus' AND p.vip_expiration_date > NOW() THEN 2
+          WHEN p.vip_status = 'vip' AND p.vip_expiration_date > NOW() THEN 3
+          ELSE 4
+        END,
+        p.created_at DESC
       LIMIT $1
     `;
     const result = await pool.query(query, [limit]);
+    return result.rows;
+  }
+
+  static async updateVipStatus(partId, vipStatus, expirationDate = null) {
+    // Validate VIP status
+    if (!VIP_STATUS_TYPES.includes(vipStatus)) {
+      throw new Error(`Invalid VIP status: ${vipStatus}. Valid options are: ${VIP_STATUS_TYPES.join(', ')}`);
+    }
+    
+    try {
+      // First, check if vip_status column exists
+      const checkColumnQuery = `
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'parts' 
+        AND column_name IN ('vip_status', 'vip_expiration_date')
+      `;
+      
+      const columnCheck = await pool.query(checkColumnQuery);
+      const existingColumns = columnCheck.rows.map(row => row.column_name);
+      
+      if (!existingColumns.includes('vip_status') || !existingColumns.includes('vip_expiration_date')) {
+        console.log('VIP columns not found in parts table. Please run the migration first.');
+        throw new Error('VIP status feature not available. Please run the database migration.');
+      }
+      
+      const query = `
+        UPDATE parts
+        SET 
+          vip_status = $1::vip_status,
+          vip_expiration_date = $2::timestamp,
+          vip_active = CASE 
+            WHEN $1 != 'none' AND $2::timestamp > NOW() THEN true 
+            ELSE false 
+          END
+        WHERE id = $3
+        RETURNING id, vip_status, vip_expiration_date, vip_active
+      `;
+      
+      const result = await pool.query(query, [vipStatus, expirationDate, partId]);
+      
+      if (result.rowCount === 0) {
+        throw new Error(`Part with ID ${partId} not found`);
+      }
+      
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error updating part VIP status:', error);
+      throw error;
+    }
+  }
+
+  static async getPartsByVipStatus(vipStatus, limit = 10, offset = 0) {
+    // Validate VIP status
+    if (!VIP_STATUS_TYPES.includes(vipStatus)) {
+      throw new Error(`Invalid VIP status: ${vipStatus}. Valid options are: ${VIP_STATUS_TYPES.join(', ')}`);
+    }
+
+    const query = `
+      SELECT 
+        p.*,
+        COALESCE(p.vip_status, 'none')::text as vip_status,
+        p.vip_expiration_date AT TIME ZONE 'UTC' as vip_expiration_date,
+        CASE 
+          WHEN p.vip_status IS NOT NULL AND p.vip_status != 'none' 
+               AND p.vip_expiration_date > NOW() 
+          THEN true 
+          ELSE false 
+        END as is_vip_active,
+        b.name as brand,
+        pc.name as category,
+        cm.name as model,
+        COALESCE(
+          (SELECT json_agg(
+            json_build_object(
+              'id', pi.id,
+              'part_id', pi.part_id,
+              'url', pi.image_url,
+              'thumbnail_url', pi.thumbnail_url,
+              'medium_url', pi.medium_url,
+              'large_url', pi.large_url,
+              'is_primary', pi.is_primary
+            )
+          ) FROM part_images pi WHERE pi.part_id = p.id),
+          '[]'
+        ) as images
+      FROM parts p
+      LEFT JOIN brands b ON p.brand_id = b.id
+      LEFT JOIN part_categories pc ON p.category_id = pc.id
+      LEFT JOIN car_models cm ON p.model_id = cm.id
+      WHERE COALESCE(p.vip_status, 'none') = $1
+      AND ($1 = 'none' OR p.vip_expiration_date > NOW())
+      ORDER BY p.created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+    
+    const result = await pool.query(query, [vipStatus, limit, offset]);
     return result.rows;
   }
 
@@ -111,5 +234,6 @@ class PartModel {
 
 module.exports = {
   PartModel,
-  VALID_CONDITIONS
+  VALID_CONDITIONS,
+  VIP_STATUS_TYPES
 };

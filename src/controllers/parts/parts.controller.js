@@ -600,6 +600,356 @@ class PartsController {
       });
     }
   }
+
+  // Purchase VIP status for a part using balance
+  async purchaseVipStatus(req, res) {
+    const { partId, vipStatus, days, colorHighlighting, colorHighlightingDays, autoRenewal, autoRenewalDays } = req.body;
+    const userId = req.user.id;
+    
+    console.log('Parts VIP purchase request:', { partId, vipStatus, days, colorHighlighting, colorHighlightingDays, autoRenewal, autoRenewalDays, userId });
+    
+    // Validate and process days parameter
+    const daysNumber = Number(days);
+    const validDays = Math.max(1, Math.round(daysNumber));
+    
+    if (!vipStatus || isNaN(daysNumber) || daysNumber <= 0) {
+      console.log('Invalid request parameters:', { vipStatus, days, daysNumber });
+      return res.status(400).json({ message: 'Invalid request parameters' });
+    }
+    
+    // Validate VIP status
+    const validVipStatuses = ['none', 'vip', 'vip_plus', 'super_vip'];
+    if (!validVipStatuses.includes(vipStatus)) {
+      return res.status(400).json({ 
+        message: `Invalid VIP status. Valid options are: ${validVipStatuses.join(', ')}` 
+      });
+    }
+    
+    try {
+      // Start database transaction using dedicated client connection
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+      
+        // Check if part exists and belongs to user
+        const partQuery = `SELECT id, title, seller_id FROM parts WHERE id = $1`;
+        const partResult = await client.query(partQuery, [partId]);
+        
+        if (partResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ message: 'Part not found' });
+        }
+        
+        const part = partResult.rows[0];
+        if (part.seller_id !== userId) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ message: 'Part does not belong to user' });
+        }
+      
+      // Calculate VIP pricing
+      let pricePerDay;
+      switch (vipStatus) {
+        case 'none':
+          pricePerDay = 0;
+          break;
+        case 'vip':
+          pricePerDay = 2;
+          break;
+        case 'vip_plus':
+          pricePerDay = 5;
+          break;
+        case 'super_vip':
+          pricePerDay = 7;
+          break;
+        default:
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: 'Invalid VIP status' });
+      }
+      
+      // Calculate base VIP price
+      const baseVipPrice = pricePerDay * validDays;
+      
+      // Calculate additional services cost
+      let additionalServicesCost = 0;
+      if (colorHighlighting) {
+        const colorDays = Number(colorHighlightingDays) || validDays;
+        additionalServicesCost += 0.5 * colorDays;
+      }
+      if (autoRenewal) {
+        const renewalDays = Number(autoRenewalDays) || validDays;
+        additionalServicesCost += 0.5 * renewalDays;
+      }
+      
+      // Calculate total price
+      const totalPrice = baseVipPrice + additionalServicesCost;
+      
+        // Validate that if VIP status is 'none', at least some additional services are selected
+        if (vipStatus === 'none' && additionalServicesCost === 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ 
+            message: 'At least one service must be selected (VIP package or additional services)' 
+          });
+        }
+      
+      console.log('Parts VIP price calculation:', {
+        pricePerDay,
+        validDays,
+        baseVipPrice,
+        additionalServicesCost,
+        totalPrice
+      });
+      
+        // Check user balance
+        const balanceQuery = `SELECT balance, balance::text as balance_text FROM users WHERE id = $1 FOR UPDATE`;
+        const balanceResult = await client.query(balanceQuery, [userId]);
+        
+        if (balanceResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ message: 'User not found' });
+        }
+        
+        const currentBalance = balanceResult.rows[0].balance;
+        
+        if (currentBalance < totalPrice) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ 
+            message: 'Insufficient balance',
+            requiredAmount: totalPrice,
+            currentBalance: currentBalance
+          });
+        }
+      
+      // Deduct from balance
+      console.log('BEFORE BALANCE UPDATE:');
+      console.log('- User ID:', userId);
+      console.log('- Current Balance:', currentBalance);
+      console.log('- Amount to Deduct:', totalPrice);
+      console.log('- Amount Type:', typeof totalPrice);
+      
+        const updateBalanceQuery = `UPDATE users SET balance = balance - $1 WHERE id = $2 RETURNING balance`;
+        const updateBalanceResult = await client.query(updateBalanceQuery, [totalPrice, userId]);
+      
+      console.log('UPDATE BALANCE RESULT:');
+      console.log('- Rows affected:', updateBalanceResult.rowCount);
+      console.log('- Result rows:', updateBalanceResult.rows);
+      
+      if (updateBalanceResult.rows.length === 0) {
+        throw new Error('Failed to update user balance - no rows returned');
+      }
+      
+      const newBalance = updateBalanceResult.rows[0].balance;
+      const actualDeduction = currentBalance - newBalance;
+      
+      console.log('AFTER BALANCE UPDATE:');
+      console.log('- New Balance:', newBalance);
+      console.log('- Expected Deduction:', totalPrice);
+      console.log('- Actual Deduction:', actualDeduction);
+      console.log('- Deduction Match:', Math.abs(actualDeduction - totalPrice) < 0.01);
+      
+      // Calculate expiration date
+      const expirationDate = new Date();
+      expirationDate.setHours(23, 59, 59, 999);
+      expirationDate.setDate(expirationDate.getDate() + validDays);
+      
+        // Use the same date format as cars (working implementation)
+        const formattedExpirationDate = expirationDate.toISOString();
+      
+      // Update part VIP status using the model method
+      let updateResult;
+      try {
+        console.log('ATTEMPTING VIP STATUS UPDATE...');
+        console.log('- Part ID:', partId);
+        console.log('- VIP Status:', vipStatus);
+        console.log('- Formatted Expiration Date:', formattedExpirationDate);
+        
+        if (vipStatus !== 'none') {
+          updateResult = await PartModel.updateVipStatus(partId, vipStatus, formattedExpirationDate);
+          console.log('VIP STATUS UPDATE SUCCESSFUL:', updateResult);
+        } else {
+          // For 'none' status, just get the part data
+          updateResult = {
+            id: partId,
+            vip_status: 'none',
+            vip_expiration_date: null,
+            vip_active: false
+          };
+          console.log('VIP STATUS SET TO NONE:', updateResult);
+        }
+      } catch (vipError) {
+        console.error('VIP STATUS UPDATE FAILED:', vipError);
+        console.log('VIP status update error (continuing with transaction recording):', vipError.message);
+        // Since VIP update failed, we should rollback the entire transaction
+        throw vipError; // This will cause the transaction to rollback
+      }
+      
+      // Update color highlighting settings if color highlighting is enabled
+      if (colorHighlighting && colorHighlightingDays > 0) {
+        try {
+          console.log(`Setting up color highlighting for part ${partId}: ${colorHighlightingDays} days`);
+          
+          // Calculate color highlighting expiration date
+          const colorHighlightingExpirationDate = new Date();
+          colorHighlightingExpirationDate.setHours(23, 59, 59, 999);
+          colorHighlightingExpirationDate.setDate(colorHighlightingExpirationDate.getDate() + colorHighlightingDays);
+          
+          const colorHighlightingUpdateQuery = `
+            UPDATE parts 
+            SET 
+              color_highlighting_enabled = $1,
+              color_highlighting_expiration_date = $2,
+              color_highlighting_total_days = $3,
+              color_highlighting_remaining_days = $4
+            WHERE id = $5
+          `;
+          
+          await client.query(colorHighlightingUpdateQuery, [
+            true, // color_highlighting_enabled
+            colorHighlightingExpirationDate.toISOString(), // when color highlighting service expires
+            colorHighlightingDays, // total days purchased
+            colorHighlightingDays, // remaining days (initially same as total)
+            partId
+          ]);
+          
+          console.log(`✓ Color highlighting configured for part ${partId} - ${colorHighlightingDays} days`);
+          
+        } catch (colorHighlightingError) {
+          console.error('Error setting up color highlighting (continuing with VIP purchase):', colorHighlightingError.message);
+          // Don't fail the entire purchase if color highlighting setup fails
+        }
+      }
+
+      // Update auto-renewal settings if auto-renewal is enabled
+      if (autoRenewal && autoRenewalDays > 0) {
+        try {
+          console.log(`Setting up auto-renewal for part ${partId}: ${autoRenewalDays} days`);
+          
+          // Calculate auto-renewal expiration date
+          const autoRenewalExpirationDate = new Date();
+          autoRenewalExpirationDate.setHours(23, 59, 59, 999);
+          autoRenewalExpirationDate.setDate(autoRenewalExpirationDate.getDate() + autoRenewalDays);
+          
+          const autoRenewalUpdateQuery = `
+            UPDATE parts 
+            SET 
+              auto_renewal_enabled = $1,
+              auto_renewal_days = $2,
+              auto_renewal_expiration_date = $3,
+              auto_renewal_total_days = $4,
+              auto_renewal_remaining_days = $5
+            WHERE id = $6
+          `;
+          
+          await client.query(autoRenewalUpdateQuery, [
+            true, // auto_renewal_enabled
+            autoRenewalDays, // auto_renewal_days (how often to refresh)
+            autoRenewalExpirationDate.toISOString(), // when auto-renewal service expires
+            autoRenewalDays, // total days purchased
+            autoRenewalDays, // remaining days (initially same as total)
+            partId
+          ]);
+          
+          console.log(`✓ Auto-renewal configured for part ${partId} - ${autoRenewalDays} days`);
+          
+        } catch (autoRenewalError) {
+          console.error('Error setting up auto-renewal (continuing with VIP purchase):', autoRenewalError.message);
+          // Don't fail the entire purchase if auto-renewal setup fails
+        }
+      }
+      
+      // Create transaction description
+      let transactionDescription = `Part VIP Purchase - Part #${partId}\n`;
+      if (vipStatus !== 'none') {
+        transactionDescription += `${vipStatus.toUpperCase().replace('_', ' ')} Package (${validDays} day${validDays > 1 ? 's' : ''}): ${baseVipPrice.toFixed(2)} GEL`;
+      } else {
+        transactionDescription += `Standard Package (no VIP upgrade): ${baseVipPrice.toFixed(2)} GEL`;
+      }
+      
+      if (colorHighlighting || autoRenewal) {
+        transactionDescription += `\nAdditional Services:`;
+        
+        if (colorHighlighting) {
+          const colorDays = Number(colorHighlightingDays) || validDays;
+          const colorCost = 0.5 * colorDays;
+          transactionDescription += `\n• Color Highlighting (${colorDays} day${colorDays > 1 ? 's' : ''}): ${colorCost.toFixed(2)} GEL`;
+        }
+        
+        if (autoRenewal) {
+          const renewalDays = Number(autoRenewalDays) || validDays;
+          const renewalCost = 0.5 * renewalDays;
+          transactionDescription += `\n• Auto Renewal (${renewalDays} day${renewalDays > 1 ? 's' : ''}): ${renewalCost.toFixed(2)} GEL`;
+        }
+      }
+      
+      transactionDescription += `\nTotal Amount: ${totalPrice.toFixed(2)} GEL`;
+      
+      // Record transaction
+      console.log('RECORDING TRANSACTION...');
+      const transactionQuery = `
+        INSERT INTO balance_transactions (user_id, amount, transaction_type, description, status, reference_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id
+      `;
+        const transactionResult = await client.query(transactionQuery, [
+          userId,
+          -totalPrice, // Negative amount for deduction
+          'part_vip_purchase',
+          transactionDescription,
+          'completed',
+          partId
+        ]);
+        console.log('TRANSACTION RECORDED WITH ID:', transactionResult.rows[0]?.id);
+        
+        // Commit transaction
+        console.log('COMMITTING TRANSACTION...');
+        await client.query('COMMIT');
+        console.log('TRANSACTION COMMITTED SUCCESSFULLY');
+        
+        // Verify balance after commit
+        const verifyBalanceQuery = `SELECT balance FROM users WHERE id = $1`;
+        const verifyResult = await client.query(verifyBalanceQuery, [userId]);
+        console.log('FINAL BALANCE VERIFICATION:', verifyResult.rows[0]?.balance);
+        
+        // Verify VIP status was saved
+        const verifyVipQuery = `SELECT id, vip_status, vip_expiration_date, vip_active FROM parts WHERE id = $1`;
+        const verifyVipResult = await client.query(verifyVipQuery, [partId]);
+        console.log('FINAL VIP STATUS VERIFICATION:', verifyVipResult.rows[0]);
+      
+      // Return success response
+      const response = {
+        success: true,
+        newBalance: newBalance,
+        vipStatus: updateResult.vip_status,
+        vipExpiration: updateResult.vip_expiration_date,
+        message: `Successfully purchased ${vipStatus} status for ${validDays} days`,
+        daysRequested: validDays,
+        totalPrice: totalPrice,
+        deductedAmount: currentBalance - newBalance,
+        priceInfo: {
+          pricePerDay,
+          days: validDays,
+          baseVipPrice,
+          additionalServicesCost,
+          totalPrice
+        }
+      };
+      
+        console.log('Parts VIP purchase successful:', response);
+        return res.status(200).json(response);
+        
+      } catch (error) {
+        console.error('Transaction error:', error);
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      
+    } catch (error) {
+      console.error('Error purchasing VIP status for part:', error);
+      return res.status(500).json({ message: 'Server error while purchasing VIP status' });
+    }
+  }
 }
 
 module.exports = new PartsController();

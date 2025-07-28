@@ -32,4 +32,14 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+const requireAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Admin access required' });
+  }
+  next();
+};
+
+// Export both individual functions and the default for compatibility
 module.exports = authMiddleware;
+module.exports.authenticateToken = authMiddleware;
+module.exports.requireAdmin = requireAdmin;

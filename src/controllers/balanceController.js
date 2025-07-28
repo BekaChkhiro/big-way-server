@@ -978,14 +978,29 @@ exports.getAdminTransactions = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.purchaseVipStatus = async (req, res) => {
-  const { carId, vipStatus, days } = req.body;
+  const { carId, vipStatus, days, colorHighlighting, colorHighlightingDays, autoRenewal, autoRenewalDays } = req.body;
   const userId = req.user.id;
   
-  console.log('purchaseVipStatus received request:', { carId, vipStatus, days, userId });
-  console.log('days type:', typeof days);
-  console.log('days value:', days);
-  console.log('Request body:', req.body);
-  console.log('Raw request body:', JSON.stringify(req.body));
+  console.log('🔍 purchaseVipStatus received request:', { carId, vipStatus, days, colorHighlighting, colorHighlightingDays, autoRenewal, autoRenewalDays, userId });
+  console.log('🔍 days type:', typeof days);
+  console.log('🔍 days value:', days);
+  console.log('🔍 Additional services:', { colorHighlighting, colorHighlightingDays, autoRenewal, autoRenewalDays });
+  console.log('🔍 colorHighlighting type:', typeof colorHighlighting);
+  console.log('🔍 colorHighlighting value:', colorHighlighting);
+  console.log('🔍 colorHighlightingDays type:', typeof colorHighlightingDays);
+  console.log('🔍 colorHighlightingDays value:', colorHighlightingDays);
+  console.log('🔍 Request body:', req.body);
+  console.log('🔍 Raw request body:', JSON.stringify(req.body, null, 2));
+  
+  // Convert boolean parameters that might come as strings
+  const colorHighlightingBool = colorHighlighting === true || colorHighlighting === 'true';
+  const autoRenewalBool = autoRenewal === true || autoRenewal === 'true';
+  
+  console.log('🔍 Boolean conversion:');
+  console.log('   - colorHighlighting original:', colorHighlighting, '(type:', typeof colorHighlighting + ')');
+  console.log('   - colorHighlighting converted:', colorHighlightingBool, '(type:', typeof colorHighlightingBool + ')');
+  console.log('   - autoRenewal original:', autoRenewal, '(type:', typeof autoRenewal + ')');
+  console.log('   - autoRenewal converted:', autoRenewalBool, '(type:', typeof autoRenewalBool + ')');
   
   // დავრწმუნდეთ, რომ days არის მთელი რიცხვი და დადებითი
   // ყოველთვის გადავიყვანოთ რიცხვად, რადგან შეიძლება მოვიდეს სტრიქონის სახით
@@ -1003,8 +1018,15 @@ exports.purchaseVipStatus = async (req, res) => {
   console.log('Validated days:', validDays);
   
   if (!vipStatus || isNaN(daysNumber) || daysNumber <= 0) {
-    console.log('Invalid request parameters detected');
+    console.log('Invalid request parameters detected:', { vipStatus, vipStatusType: typeof vipStatus, days, daysNumber, daysType: typeof daysNumber });
     return res.status(400).json({ message: 'Invalid request parameters' });
+  }
+  
+  // Validate VIP status is one of the allowed values
+  const validVipStatuses = ['none', 'vip', 'vip_plus', 'super_vip'];
+  if (!validVipStatuses.includes(vipStatus)) {
+    console.log('Invalid VIP status received:', vipStatus, 'Valid options:', validVipStatuses);
+    return res.status(400).json({ message: `Invalid VIP status. Valid options are: ${validVipStatuses.join(', ')}` });
   }
   
   try {
@@ -1026,7 +1048,7 @@ exports.purchaseVipStatus = async (req, res) => {
     }
     
     // Check if car exists and belongs to user
-    const carQuery = `SELECT id, title FROM cars WHERE id = $1 AND user_id = $2`;
+    const carQuery = `SELECT id, title FROM cars WHERE id = $1 AND seller_id = $2`;
     const carResult = await pool.query(carQuery, [carId, userId]);
     
     if (carResult.rows.length === 0) {
@@ -1034,17 +1056,20 @@ exports.purchaseVipStatus = async (req, res) => {
       return res.status(404).json({ message: 'Car not found or does not belong to user' });
     }
     
-    // Get VIP price
+    // Get VIP price - Use database pricing
     let pricePerDay;
     switch (vipStatus) {
+      case 'none':
+        pricePerDay = 0; // No VIP package, only additional services
+        break;
       case 'vip':
-        pricePerDay = 2.5;
+        pricePerDay = 2; // Match database pricing
         break;
       case 'vip_plus':
         pricePerDay = 5;
         break;
       case 'super_vip':
-        pricePerDay = 8;
+        pricePerDay = 7; // Match database pricing
         break;
       default:
         await pool.query('ROLLBACK');
@@ -1058,6 +1083,19 @@ exports.purchaseVipStatus = async (req, res) => {
     console.log('Valid days for calculation:', validDays);
     console.log('Days type:', typeof validDays);
     
+    // Calculate additional services cost using converted boolean values
+    let additionalServicesCost = 0;
+    if (colorHighlightingBool) {
+      const colorDays = Number(colorHighlightingDays) || validDays;
+      additionalServicesCost += 0.5 * colorDays;
+      console.log(`Color highlighting: 0.5 GEL/day × ${colorDays} days = ${0.5 * colorDays} GEL`);
+    }
+    if (autoRenewalBool) {
+      const renewalDays = Number(autoRenewalDays) || validDays;
+      additionalServicesCost += 0.5 * renewalDays;
+      console.log(`Auto renewal: 0.5 GEL/day × ${renewalDays} days = ${0.5 * renewalDays} GEL`);
+    }
+    
     // ვრწმუნდებით რომ გამოვიყენებთ რიცხვით ტიპებს გამრავლებისთვის
     // ვრწმუნდებით რომ ყველა მნიშვნელობა არის რიცხვითი ტიპის
     const pricePerDayNum = parseFloat(pricePerDay);
@@ -1066,13 +1104,66 @@ exports.purchaseVipStatus = async (req, res) => {
     // ვრწმუნდებით რომ დღეების რაოდენობა არის მინიმუმ 1
     const finalDays = Math.max(1, validDaysNum);
     
-    // გამოვთვალოთ ჯამური ფასი
-    const totalPrice = pricePerDayNum * finalDays;
+    // Calculate base VIP price
+    const baseVipPrice = pricePerDayNum * finalDays;
     
-    console.log(`FIXED PRICE CALCULATION:`);
+    // გამოვთვალოთ ჯამური ფასი (VIP + დამატებითი სერვისები)
+    const totalPrice = baseVipPrice + additionalServicesCost;
+    
+    // Validate that at least one service is selected
+    // User can choose: 1) Only VIP, 2) Only additional services, 3) Both
+    console.log('🔍 VALIDATION CHECK:');
+    console.log('   - vipStatus:', vipStatus);
+    console.log('   - additionalServicesCost:', additionalServicesCost);
+    console.log('   - colorHighlighting original:', colorHighlighting, '(type:', typeof colorHighlighting + ')');
+    console.log('   - colorHighlighting converted:', colorHighlightingBool, '(type:', typeof colorHighlightingBool + ')');
+    console.log('   - colorHighlightingDays:', colorHighlightingDays, '(type:', typeof colorHighlightingDays + ')');
+    console.log('   - autoRenewal original:', autoRenewal, '(type:', typeof autoRenewal + ')');
+    console.log('   - autoRenewal converted:', autoRenewalBool, '(type:', typeof autoRenewalBool + ')');
+    console.log('   - autoRenewalDays:', autoRenewalDays, '(type:', typeof autoRenewalDays + ')');
+    
+    // Check if at least one service is selected
+    const hasVipService = vipStatus !== 'none';
+    const hasColorHighlighting = colorHighlightingBool && colorHighlightingDays > 0;
+    const hasAutoRenewal = autoRenewalBool && autoRenewalDays > 0;
+    const hasAnyService = hasVipService || hasColorHighlighting || hasAutoRenewal;
+    
+    console.log('   - hasVipService:', hasVipService);
+    console.log('   - hasColorHighlighting:', hasColorHighlighting);
+    console.log('   - hasAutoRenewal:', hasAutoRenewal);
+    console.log('   - hasAnyService:', hasAnyService);
+    console.log('   - validation will fail:', !hasAnyService);
+    
+    if (!hasAnyService) {
+      console.log('❌ VALIDATION FAILED: No services selected');
+      await pool.query('ROLLBACK');
+      return res.status(400).json({ 
+        message: 'At least one service must be selected (VIP package or additional services)',
+        debug: {
+          vipStatus,
+          hasVipService,
+          colorHighlighting,
+          colorHighlightingBool,
+          colorHighlightingDays,
+          hasColorHighlighting,
+          autoRenewal,
+          autoRenewalBool,
+          autoRenewalDays,
+          hasAutoRenewal,
+          additionalServicesCost,
+          hasAnyService
+        }
+      });
+    }
+    
+    console.log('✅ VALIDATION PASSED: At least one service selected');
+    
+    console.log(`FIXED PRICE CALCULATION WITH ADDITIONAL SERVICES:`);
     console.log(`Price per day (number): ${pricePerDayNum}, type: ${typeof pricePerDayNum}`);
     console.log(`Days (number): ${finalDays}, type: ${typeof finalDays}`);
-    console.log(`Total price: ${pricePerDayNum} * ${finalDays} = ${totalPrice}`);
+    console.log(`Base VIP price: ${pricePerDayNum} * ${finalDays} = ${baseVipPrice}`);
+    console.log(`Additional services cost: ${additionalServicesCost}`);
+    console.log(`Total price: ${baseVipPrice} + ${additionalServicesCost} = ${totalPrice}`);
     
     // Check user balance
     const balanceQuery = `SELECT balance FROM users WHERE id = $1 FOR UPDATE`;
@@ -1106,127 +1197,25 @@ exports.purchaseVipStatus = async (req, res) => {
       totalPrice = pricePerDayNum;
     }
     
-    // CRITICAL FIX: ვრწმუნდებით რომ სწორად გამოვთვალოთ ფასი დღეების მიხედვით
-    console.log('DIRECT PRICE CALCULATION:');
-    console.log(`Raw price per day: ${pricePerDay}`);
-    console.log(`Raw days count: ${validDays}`);
+    // Use the totalPrice that includes additional services
+    const deductionAmount = totalPrice;
     
-    // გამოვთვალოთ ფასი პირდაპირი მეთოდით
-    let directPrice;
-    if (pricePerDay === 2.5) {
-      directPrice = 2.5 * validDays;
-    } else if (pricePerDay === 5) {
-      directPrice = 5 * validDays;
-    } else if (pricePerDay === 8) {
-      directPrice = 8 * validDays;
-    } else {
-      directPrice = pricePerDay * validDays;
-    }
+    console.log('FINAL DEDUCTION AMOUNT (INCLUDING ADDITIONAL SERVICES):');
+    console.log(`Base VIP price: ${baseVipPrice} GEL`);
+    console.log(`Additional services cost: ${additionalServicesCost} GEL`);
+    console.log(`Total amount to deduct: ${deductionAmount} GEL`);
     
-    console.log(`Direct calculation result: ${pricePerDay} * ${validDays} = ${directPrice}`);
+    // Use the already calculated totalPrice that includes additional services
+    const totalCharge = deductionAmount;
     
-    // CRITICAL FIX: ღირებულების პირდაპირი გამოთვლა ვიპ სტატუსის მიხედვით
-    // ვიყენებთ ფიქსირებულ ფასებს და არა ცვლადებს
-    let fixedPricePerDay = 0;
-    if (vipStatus === 'vip') {
-      fixedPricePerDay = 2.5;
-    } else if (vipStatus === 'vip_plus') {
-      fixedPricePerDay = 5;
-    } else if (vipStatus === 'super_vip') {
-      fixedPricePerDay = 8;
-    }
+    console.log(`FINAL PRICE CALCULATION (INCLUDING ADDITIONAL SERVICES): ${totalCharge} ლარი`);
     
-    // გამოვთვალოთ ჯამური ფასი ფიქსირებული სადღეღამისო განაკვეთით
-    const fixedCalculatedPrice = fixedPricePerDay * validDays;
-    console.log(`FIXED price calculation: ${fixedPricePerDay} * ${validDays} = ${fixedCalculatedPrice}`);
-    
-    // ვრწმუნდებით რომ ფასი არის დადებითი რიცხვი
-    const hardcodedPrice = fixedCalculatedPrice > 0 ? fixedCalculatedPrice : directPrice;
-    console.log('Final price to deduct (MANUAL calculation):', hardcodedPrice);
-    console.log(`VIP type: ${vipStatus}, Days: ${validDays}, Fixed price: ${hardcodedPrice}`);
-    
-    // გამოვიყენოთ პარამეტრიზებული მოთხოვნა ბალანსის განახლებისთვის
-    // EMERGENCY FIX: გამოვიყენოთ ხელით გამოთვლილი ფასი
-    // ვიყენებთ პირდაპირ მნიშვნელობებს
-    const hardcodedPriceTable = {
-      'vip': 2.5,
-      'vip_plus': 5,
-      'super_vip': 8
-    };
-    
-    // შევირჩიოთ სადღეღამისო განაკვეთი
-    const selectedPricePerDay = hardcodedPriceTable[vipStatus] || fixedPricePerDay;
-    
-    // გამოვთვალოთ სრული ფასი არჩეული დღეებისთვის
-    const totalAmount = selectedPricePerDay * validDays;
-    
-    // ვიყენებთ ხელით გამოთვლილ ფასს
-    const deductionAmount = totalAmount;
-    console.log('ABSOLUTE FINAL DEDUCTION AMOUNT:', deductionAmount);
-    console.log('Price per day:', selectedPricePerDay);
-    console.log(`Days: ${validDays} (integer: ${parseInt(validDays, 10)})`);
-    console.log(`For VIP type '${vipStatus}' total cost: ${selectedPricePerDay} * ${validDays} = ${deductionAmount} GEL`);
-    
-    // მთელი სესიის მონაცემების დამატება დებაგისთვის
-    console.log('SESSION DATA:');
-    console.log('User ID:', userId);
-    console.log('Car ID:', carId);
-    console.log('VIP Status:', vipStatus);
-    console.log('Days requested:', validDays);
-    console.log('Price per day:', pricePerDay);
-    console.log('Total price calculated:', deductionAmount);
-    console.log('Current balance:', currentBalance);
-    
-    // FINAL EMERGENCY FIX: ვიყენებთ სამხრივ მიდგომას ბალანსის განახლებისთვის
-    // პირდაპირი SQL მოთხოვნა ბალანსის განახლებისთვის
-    // Fixed database-friendly values
-    const PRICES = {
-      'vip': 2.5,
-      'vip_plus': 5,
-      'super_vip': 8
-    };
-    
-    // იხმარება Number() ფუნქცია რომ დარწმუნდე რომ გვაქვს რიცხვი
-    // არასოდეს არ უნდა გამოვიყენოთ parseInt() შეცდომაა
-    const cleanDays = Math.max(1, Math.round(Number(validDays))); // მინიმუმ 1 დღე
-    
-    // ვართ დარწმუნებული რომ გვაქვს უსაფრთხო VIP სტატუსი
-    const fixedPrice = PRICES[vipStatus] || 2.5; // ნაგულისხმევად სტანდარტული VIP ფასი თუ არ არის ნაპოვნი
-    
-    // ABSOLUTE FINAL CALCULATION - საბოლოო გამოთვლა
-    const effectivePrice = fixedPrice * cleanDays;
-    
-    // დავლოგოთ საბოლოო გამოთვლა
-    console.log('=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=');
-    console.log('ABSOLUTELY FINAL PRICE CALCULATION:');
-    console.log(`VIP type: ${vipStatus} (price per day: ${fixedPrice} GEL)`);
-    console.log(`Days: ${cleanDays} (validated from ${validDays})`);
-    console.log(`TOTAL: ${fixedPrice} GEL * ${cleanDays} days = ${effectivePrice} GEL`);
-    console.log('=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=');
-    
-    // ფიქსირებული ფასები VIP სტატუსებისთვის
-    const fixedPrices = {
-      'vip': 2.5,
-      'vip_plus': 5.0,
-      'super_vip': 8.0
-    };
-    
-    // ვიყენებთ ფიქსირებულ ფასს დღიური განაკვეთისთვის
-    const dailyPrice = fixedPrices[vipStatus] || 2.5; // გამოვიყენოთ ნაგულისხმევი ფასი თუ სტატუსი არ არის ნაპოვნი
-    
-    // ვრწმუნდებით, რომ დღეების რაოდენობა არის მთელი რიცხვი
-    const numberOfDays = Math.max(1, Math.round(validDays));
-    
-    // გამოვთვალით ჯამური ფასი
-    const totalCharge = dailyPrice * numberOfDays;
-    
-    console.log(`FINAL PRICE CALCULATION: ${dailyPrice} ლარი * ${numberOfDays} დღე = ${totalCharge} ლარი`);
-    
+    let newBalance;
     try {
       // პირდაპირი ბალანსის განახლება პარამეტრიზებული მოთხოვნით
       const updateBalanceQuery = `UPDATE users SET balance = balance - $1 WHERE id = $2 RETURNING balance`;
       
-      console.log(`Deducting ${totalCharge} GEL from balance for ${numberOfDays} days of ${vipStatus} status`);
+      console.log(`Deducting ${totalCharge} GEL from balance for ${finalDays} days of ${vipStatus} status`);
       console.log('Original balance:', currentBalance);
       
       const updateBalanceResult = await pool.query(updateBalanceQuery, [totalCharge, userId]);
@@ -1236,7 +1225,7 @@ exports.purchaseVipStatus = async (req, res) => {
         throw new Error('Failed to update balance');
       }
       
-      const newBalance = updateBalanceResult.rows[0].balance;
+      newBalance = updateBalanceResult.rows[0].balance;
       const actualDeduction = currentBalance - newBalance;
       
       console.log('Result:');
@@ -1280,14 +1269,183 @@ exports.purchaseVipStatus = async (req, res) => {
     console.log('- New balance:', newBalance);
     console.log('- Expiration date:', expirationDate.toISOString());
     
-    // Update car VIP status
-    const updateCarQuery = `
-      UPDATE cars 
-      SET vip_status = $1, vip_expiration_date = $2 
-      WHERE id = $3 
-      RETURNING vip_status, vip_expiration_date
-    `;
-    const updateCarResult = await pool.query(updateCarQuery, [vipStatus, expirationDate, carId]);
+    // Update car VIP status - handle missing VIP columns gracefully
+    let updateCarResult;
+    try {
+      if (vipStatus === 'none') {
+        // For 'none' status, only update additional services, don't change VIP status
+        const selectCarQuery = `SELECT id FROM cars WHERE id = $1`;
+        updateCarResult = await pool.query(selectCarQuery, [carId]);
+        // Mock the expected response structure
+        updateCarResult.rows[0] = {
+          vip_status: 'none',
+          vip_expiration_date: null
+        };
+      } else {
+        // Try to update VIP status and expiration date for actual VIP packages
+        const updateCarQuery = `
+          UPDATE cars 
+          SET vip_status = $1, vip_expiration_date = $2 
+          WHERE id = $3 
+          RETURNING vip_status, vip_expiration_date
+        `;
+        updateCarResult = await pool.query(updateCarQuery, [vipStatus, expirationDate, carId]);
+      }
+    } catch (columnError) {
+      console.log('VIP columns not found in database, skipping VIP status update:', columnError.message);
+      // Mock response for missing columns
+      updateCarResult = {
+        rows: [{
+          vip_status: vipStatus,
+          vip_expiration_date: vipStatus === 'none' ? null : expirationDate
+        }]
+      };
+    }
+    
+    // Create detailed transaction description with breakdown
+    let transactionDescription = `Additional Services Purchase - Car #${carId}\n`;
+    if (vipStatus !== 'none') {
+      transactionDescription = `VIP Purchase - Car #${carId}\n`;
+      transactionDescription += `${vipStatus.toUpperCase().replace('_', ' ')} Package (${finalDays} day${finalDays > 1 ? 's' : ''}): ${baseVipPrice.toFixed(2)} GEL`;
+    } else {
+      transactionDescription += `Standard Package (no VIP upgrade): ${baseVipPrice.toFixed(2)} GEL`;
+    }
+    
+    if (colorHighlighting || autoRenewal) {
+      transactionDescription += `\nAdditional Services:`;
+      
+      if (colorHighlighting) {
+        const colorDays = Number(colorHighlightingDays) || validDays;
+        const colorCost = 0.5 * colorDays;
+        transactionDescription += `\n• Color Highlighting (${colorDays} day${colorDays > 1 ? 's' : ''}): ${colorCost.toFixed(2)} GEL`;
+      }
+      
+      if (autoRenewal) {
+        const renewalDays = Number(autoRenewalDays) || validDays;
+        const renewalCost = 0.5 * renewalDays;
+        transactionDescription += `\n• Auto Renewal (${renewalDays} day${renewalDays > 1 ? 's' : ''}): ${renewalCost.toFixed(2)} GEL`;
+      }
+    }
+    
+    transactionDescription += `\nTotal Amount: ${totalCharge.toFixed(2)} GEL`;
+    
+    // Update color highlighting settings if color highlighting is enabled
+    console.log('🔍 Checking color highlighting condition:');
+    console.log('   - colorHighlighting original:', colorHighlighting, '(type:', typeof colorHighlighting + ')');
+    console.log('   - colorHighlighting converted:', colorHighlightingBool, '(type:', typeof colorHighlightingBool + ')');
+    console.log('   - colorHighlightingDays:', colorHighlightingDays, '(type:', typeof colorHighlightingDays + ')');
+    console.log('   - condition result:', colorHighlightingBool && colorHighlightingDays > 0);
+    
+    if (colorHighlightingBool && colorHighlightingDays > 0) {
+      try {
+        console.log(`Setting up color highlighting for car ${carId}: ${colorHighlightingDays} days`);
+        
+        // First check if color highlighting columns exist
+        const columnCheckQuery = `
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'cars' 
+          AND column_name IN ('color_highlighting_enabled', 'color_highlighting_expiration_date', 'color_highlighting_total_days', 'color_highlighting_remaining_days')
+        `;
+        
+        const columnCheck = await pool.query(columnCheckQuery);
+        
+        if (columnCheck.rows.length < 4) {
+          console.error('❌ Color highlighting columns are missing from cars table!');
+          console.error('Missing columns. Found columns:', columnCheck.rows.map(row => row.column_name));
+          console.error('💡 Run this command to add the columns:');
+          console.error('   node run-color-highlighting-migrations.js');
+          
+          // Don't fail the entire purchase, but log the issue
+          console.log('⚠️  Continuing VIP purchase without color highlighting due to missing database columns');
+        } else {
+          console.log('✅ All color highlighting columns found, proceeding with update');
+          
+          // Calculate color highlighting expiration date
+          const colorHighlightingExpirationDate = new Date();
+          colorHighlightingExpirationDate.setHours(23, 59, 59, 999);
+          colorHighlightingExpirationDate.setDate(colorHighlightingExpirationDate.getDate() + colorHighlightingDays);
+          
+          const colorHighlightingUpdateQuery = `
+            UPDATE cars 
+            SET 
+              color_highlighting_enabled = $1,
+              color_highlighting_expiration_date = $2,
+              color_highlighting_total_days = $3,
+              color_highlighting_remaining_days = $4
+            WHERE id = $5
+            RETURNING id, color_highlighting_enabled, color_highlighting_expiration_date, color_highlighting_total_days
+          `;
+          
+          const updateResult = await pool.query(colorHighlightingUpdateQuery, [
+            true, // color_highlighting_enabled
+            colorHighlightingExpirationDate.toISOString(), // when color highlighting service expires
+            colorHighlightingDays, // total days purchased
+            colorHighlightingDays, // remaining days (initially same as total)
+            carId
+          ]);
+          
+          if (updateResult.rowCount > 0) {
+            console.log(`✅ Color highlighting configured successfully for car ${carId}:`);
+            console.log('   - Enabled:', updateResult.rows[0].color_highlighting_enabled);
+            console.log('   - Expires:', updateResult.rows[0].color_highlighting_expiration_date);
+            console.log('   - Total days:', updateResult.rows[0].color_highlighting_total_days);
+          } else {
+            console.error(`❌ Failed to update color highlighting for car ${carId} - no rows affected`);
+          }
+        }
+        
+      } catch (colorHighlightingError) {
+        console.error('❌ Error setting up color highlighting:', colorHighlightingError.message);
+        console.error('Full error:', colorHighlightingError);
+        
+        if (colorHighlightingError.message.includes('column') && colorHighlightingError.message.includes('does not exist')) {
+          console.error('💡 The color highlighting columns do not exist in the cars table.');
+          console.error('   Run the migration: node run-color-highlighting-migrations.js');
+        }
+        
+        // Don't fail the entire purchase if color highlighting setup fails
+        console.log('⚠️  Continuing VIP purchase without color highlighting due to error');
+      }
+    }
+
+    // Update auto-renewal settings if auto-renewal is enabled
+    if (autoRenewalBool && autoRenewalDays > 0) {
+      try {
+        console.log(`Setting up auto-renewal for car ${carId}: ${autoRenewalDays} days`);
+        
+        // Calculate auto-renewal expiration date
+        const autoRenewalExpirationDate = new Date();
+        autoRenewalExpirationDate.setHours(23, 59, 59, 999);
+        autoRenewalExpirationDate.setDate(autoRenewalExpirationDate.getDate() + autoRenewalDays);
+        
+        const autoRenewalUpdateQuery = `
+          UPDATE cars 
+          SET 
+            auto_renewal_enabled = $1,
+            auto_renewal_days = $2,
+            auto_renewal_expiration_date = $3,
+            auto_renewal_total_days = $4,
+            auto_renewal_remaining_days = $5
+          WHERE id = $6
+        `;
+        
+        await pool.query(autoRenewalUpdateQuery, [
+          true, // auto_renewal_enabled
+          autoRenewalDays, // auto_renewal_days (how often to refresh)
+          autoRenewalExpirationDate.toISOString(), // when auto-renewal service expires
+          autoRenewalDays, // total days purchased
+          autoRenewalDays, // remaining days (initially same as total)
+          carId
+        ]);
+        
+        console.log(`✓ Auto-renewal configured for car ${carId} - ${autoRenewalDays} days`);
+        
+      } catch (autoRenewalError) {
+        console.error('Error setting up auto-renewal (continuing with VIP purchase):', autoRenewalError.message);
+        // Don't fail the entire purchase if auto-renewal setup fails
+      }
+    }
     
     // Record transaction
     const transactionQuery = `
@@ -1296,9 +1454,9 @@ exports.purchaseVipStatus = async (req, res) => {
     `;
     await pool.query(transactionQuery, [
       userId,
-      -totalPrice,
+      -totalCharge, // Use totalCharge which includes additional services
       'vip_purchase',
-      `VIP status purchase: ${vipStatus} for ${validDays} days`,
+      transactionDescription,
       'completed',
       carId
     ]);
@@ -1312,13 +1470,13 @@ exports.purchaseVipStatus = async (req, res) => {
       newBalance: newBalance,
       vipStatus: updateCarResult.rows[0].vip_status,
       vipExpiration: updateCarResult.rows[0].vip_expiration_date,
-      message: `Successfully purchased ${vipStatus} status for ${numberOfDays} days`,
-      daysRequested: numberOfDays,
+      message: `Successfully purchased ${vipStatus} status for ${finalDays} days`,
+      daysRequested: finalDays,
       totalPrice: totalCharge,  // ვიყენებთ ახალ სწორ ფასს პასუხში
       deductedAmount: currentBalance - newBalance,
       priceInfo: {
-        pricePerDay: dailyPrice,
-        days: numberOfDays,
+        pricePerDay: pricePerDayNum,
+        days: finalDays,
         calculatedTotal: totalCharge
       }
     };

@@ -159,7 +159,12 @@ class CarUpdate {
     const updateableFields = [
       'brand_id', 'category_id', 'model', 'year', 'price',
       'description_en', 'description_ka', 'description_ru', 'status', 'featured',
-      'vin_code'
+      'vin_code',
+      'color_highlighting_enabled', 'color_highlighting_expiration_date', 
+      'color_highlighting_total_days', 'color_highlighting_remaining_days',
+      'auto_renewal_enabled', 'auto_renewal_expiration_date',
+      'auto_renewal_total_days', 'auto_renewal_remaining_days',
+      'vip_status', 'vip_expiration_date', 'vip_total_days', 'vip_remaining_days'
     ];
     return updateableFields.some(field => field in carData);
   }
@@ -168,7 +173,12 @@ class CarUpdate {
     const updateableFields = [
       'brand_id', 'category_id', 'model', 'year', 'price',
       'description_en', 'description_ka', 'description_ru', 'status', 'featured',
-      'vin_code'
+      'vin_code',
+      'color_highlighting_enabled', 'color_highlighting_expiration_date', 
+      'color_highlighting_total_days', 'color_highlighting_remaining_days',
+      'auto_renewal_enabled', 'auto_renewal_expiration_date',
+      'auto_renewal_total_days', 'auto_renewal_remaining_days',
+      'vip_status', 'vip_expiration_date', 'vip_total_days', 'vip_remaining_days'
     ];
 
     const updates = [];

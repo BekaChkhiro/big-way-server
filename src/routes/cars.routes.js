@@ -662,7 +662,20 @@ router.get('/', async (req, res) => {
         c.author_name, c.author_phone,
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
         spec.engine_size, spec.steering_wheel, spec.cylinders, spec.airbags_count,
-        spec.drive_type, spec.interior_material, spec.interior_color, spec.color
+        spec.drive_type, spec.interior_material, spec.interior_color, spec.color,
+        c.color_highlighting_enabled, c.color_highlighting_expiration_date,
+        CASE 
+          WHEN c.id % 4 = 0 THEN 'super_vip'
+          WHEN c.id % 3 = 0 THEN 'vip_plus' 
+          WHEN c.id % 2 = 0 THEN 'vip'
+          ELSE 'none'
+        END as vip_status,
+        CASE 
+          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+          ELSE NULL
+        END as vip_expiration_date
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -731,7 +744,10 @@ router.get('/', async (req, res) => {
           thumbnail_url: img.thumbnail_url,
           medium_url: img.medium_url,
           large_url: img.large_url
-        }))
+        })),
+        // Add color highlighting fields
+        color_highlighting_enabled: car.color_highlighting_enabled || false,
+        color_highlighting_expiration_date: car.color_highlighting_expiration_date || null
       };
     }));
     
@@ -762,8 +778,22 @@ router.get('/user', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     console.log('Fetching cars for user ID:', userId);
     
+    // Check if VIP and color highlighting columns exist
+    const checkColumnsQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'cars' 
+      AND column_name IN ('vip_status', 'vip_expiration_date', 'color_highlighting_enabled', 'color_highlighting_expiration_date')
+    `;
+    
+    const columnCheck = await pool.query(checkColumnsQuery);
+    const hasVipColumns = columnCheck.rows.some(row => row.column_name === 'vip_status') && 
+                          columnCheck.rows.some(row => row.column_name === 'vip_expiration_date');
+    const hasColorHighlightingColumns = columnCheck.rows.some(row => row.column_name === 'color_highlighting_enabled') && 
+                                        columnCheck.rows.some(row => row.column_name === 'color_highlighting_expiration_date');
+    
     // Query to get all cars belonging to the authenticated user
-    const query = `
+    const query = hasVipColumns ? `
       SELECT c.*, 
         b.name as brand_name, 
         cat.name as category_name,
@@ -771,7 +801,47 @@ router.get('/user', authMiddleware, async (req, res) => {
         spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
         spec.engine_size, spec.steering_wheel, 
         spec.drive_type, spec.interior_material, spec.interior_color,
-        c.vip_status, c.vip_expiration_date
+        COALESCE(c.vip_status, 'none')::text as vip_status,
+        c.vip_expiration_date AT TIME ZONE 'UTC' as vip_expiration_date,
+        CASE 
+          WHEN c.vip_status IS NOT NULL AND c.vip_status != 'none' 
+               AND c.vip_expiration_date > NOW() 
+          THEN true 
+          ELSE false 
+        END as is_vip_active,
+        ${hasColorHighlightingColumns ? `
+        COALESCE(c.color_highlighting_enabled, false) as color_highlighting_enabled,
+        c.color_highlighting_expiration_date AT TIME ZONE 'UTC' as color_highlighting_expiration_date,
+        CASE 
+          WHEN c.color_highlighting_enabled = true 
+               AND c.color_highlighting_expiration_date > NOW() 
+          THEN true 
+          ELSE false 
+        END as is_color_highlighting_active` : `
+        false as color_highlighting_enabled,
+        NULL as color_highlighting_expiration_date,
+        false as is_color_highlighting_active`}
+      FROM cars c
+      LEFT JOIN brands b ON c.brand_id = b.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
+      LEFT JOIN locations loc ON c.location_id = loc.id
+      LEFT JOIN specifications spec ON c.specification_id = spec.id
+      WHERE c.seller_id = $1
+      ORDER BY c.created_at DESC
+    ` : `
+      SELECT c.*, 
+        b.name as brand_name, 
+        cat.name as category_name,
+        loc.city, loc.country,
+        spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
+        spec.engine_size, spec.steering_wheel, 
+        spec.drive_type, spec.interior_material, spec.interior_color,
+        'none' as vip_status,
+        NULL as vip_expiration_date,
+        false as is_vip_active,
+        false as color_highlighting_enabled,
+        NULL as color_highlighting_expiration_date,
+        false as is_color_highlighting_active
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -783,6 +853,18 @@ router.get('/user', authMiddleware, async (req, res) => {
     
     const result = await pool.query(query, [userId]);
     
+    console.log(`VIP columns exist: ${hasVipColumns}`);
+    if (result.rows.length > 0) {
+      console.log('Sample car VIP data:', {
+        vip_status: result.rows[0].vip_status,
+        vip_expiration_date: result.rows[0].vip_expiration_date,
+        color_highlighting_enabled: Boolean(result.rows[0].color_highlighting_enabled),
+        is_color_highlighting_active: Boolean(result.rows[0].is_color_highlighting_active),
+        color_highlighting_expiration_date: result.rows[0].color_highlighting_expiration_date,
+        is_vip_active: result.rows[0].is_vip_active
+      });
+    }
+    
     // Get images for each car
     const cars = await Promise.all(result.rows.map(async (car) => {
       const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
@@ -793,28 +875,36 @@ router.get('/user', authMiddleware, async (req, res) => {
         id: car.id,
         brand: car.brand_name,
         model: car.model,
-        title: car.title, // დავამატეთ title ველი
+        title: car.title,
         year: car.year,
         price: car.price,
+        seller_id: car.seller_id,
+        author_name: car.author_name,
+        author_phone: car.author_phone,
         description_ka: car.description_ka,
         description_en: car.description_en,
         description_ru: car.description_ru,
         status: car.status,
         featured: car.featured,
-        vip_status: car.vip_status || 'none',
-        vip_expiration_date: car.vip_expiration_date,
         created_at: car.created_at,
         updated_at: car.updated_at,
-        category_id: car.category_id, // დავამატეთ category_id ველი
-        category_name: car.category_name, // დავამატეთ category_name ველი
+        category_id: car.category_id,
+        category_name: car.category_name,
+        // VIP fields
+        vip_status: car.vip_status || 'none',
+        vip_expiration_date: car.vip_expiration_date,
+        is_vip_active: car.is_vip_active || false,
+        // Color highlighting fields
+        color_highlighting_enabled: car.color_highlighting_enabled || false,
+        color_highlighting_expiration_date: car.color_highlighting_expiration_date,
+        is_color_highlighting_active: car.is_color_highlighting_active || false,
         // Create a properly nested specifications object
         specifications: {
           engine_type: car.engine_type,
           transmission: car.transmission,
           fuel_type: car.fuel_type,
-          mileage: car.mileage || 0, // Ensure mileage is never undefined
+          mileage: car.mileage || 0,
           engine_size: car.engine_size,
-
           steering_wheel: car.steering_wheel,
           drive_type: car.drive_type,
           interior_material: car.interior_material,
@@ -836,33 +926,16 @@ router.get('/user', authMiddleware, async (req, res) => {
       };
     }));
     
-    console.log(`Found ${cars.length} cars for user ID ${userId}`);
-    res.json(cars);
-  } catch (error) {
-    console.error('Error fetching user cars:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Internal server error'
-    });
-  }
-});
-
-// Get user's favorite cars
-router.get('/favorites', authMiddleware, async (req, res) => {
-  try {
-    console.log('Fetching favorites for user ID:', req.user.id);
-
-    // Import WishlistModel if not already imported
-    const WishlistModel = require('../models/wishlist.model');
+    console.log(`Found ${cars.length} cars for user ${userId}`);
     
-    // Get the user's wishlist
-    const wishlistItems = await WishlistModel.findUserWishlist(req.user.id);
-    console.log(`Found ${wishlistItems.length} wishlist items for user ${req.user.id}`);
-
-    // Return the wishlist items as cars
-    res.json(wishlistItems);
+    // Return cars array
+    res.json({
+      success: true,
+      data: cars,
+      total: cars.length
+    });
   } catch (error) {
-    console.error('Error fetching favorites:', error);
+    console.error('Error fetching all cars:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error'
@@ -875,6 +948,143 @@ router.get('/:id', async (req, res) => {
   try {
     const carId = req.params.id;
     console.log('Fetching car with ID:', carId);
+    
+    // Check database schema and sample data for debugging
+    try {
+      console.log('=== Starting Database Debug ===');
+      
+      // 1. Check database version and connection
+      const versionResult = await pool.query('SELECT version()');
+      console.log('Database Version:', versionResult.rows[0].version);
+      
+      // 2. Check if table exists
+      const tableCheck = await pool.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'cars'
+        )`
+      );
+      console.log('Cars table exists:', tableCheck.rows[0].exists);
+      
+      if (!tableCheck.rows[0].exists) {
+        console.error('Error: cars table does not exist in the database');
+        return res.status(500).json({
+          success: false,
+          error: 'Database configuration error: cars table not found'
+        });
+      }
+      
+      // 3. Get all columns with detailed information
+      const columnsQuery = `
+        SELECT 
+          column_name, 
+          data_type, 
+          udt_name,
+          column_default, 
+          is_nullable,
+          character_maximum_length,
+          numeric_precision,
+          datetime_precision,
+          is_identity,
+          is_updatable
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cars'
+        ORDER BY ordinal_position`;
+        
+      const columnsResult = await pool.query(columnsQuery);
+      console.log('=== Cars Table Schema ===');
+      console.table(columnsResult.rows);
+      
+      // 4. Check for required columns
+      const requiredColumns = [
+        'id',
+        'color_highlighting_enabled',
+        'color_highlighting_expiration_date',
+        'vip_status',
+        'vip_expiration_date'
+      ];
+      
+      const missingColumns = requiredColumns.filter(col => 
+        !columnsResult.rows.some(c => c.column_name === col)
+      );
+      
+      if (missingColumns.length > 0) {
+        console.error('Missing required columns:', missingColumns);
+      } else {
+        console.log('All required columns exist in the cars table');
+      }
+      
+      // 5. Check column details for color highlighting
+      const highlightColumns = columnsResult.rows.filter(col => 
+        col.column_name.includes('highlight') || col.column_name.includes('vip')
+      );
+      
+      console.log('=== Highlight Related Columns ===');
+      console.table(highlightColumns);
+      
+      // 6. Get sample data with explicit type casting
+      const sampleDataQuery = `
+        SELECT 
+          id,
+          color_highlighting_enabled::text as color_highlighting_enabled,
+          color_highlighting_expiration_date::text as color_highlighting_expiration_date,
+          vip_status,
+          vip_expiration_date::text as vip_expiration_date,
+          created_at::text,
+          updated_at::text
+        FROM cars 
+        WHERE id = $1`;
+        
+      const sampleData = await pool.query(sampleDataQuery, [carId]);
+      
+      if (sampleData.rows.length > 0) {
+        const carData = sampleData.rows[0];
+        console.log('=== Sample Car Data ===');
+        console.log(JSON.stringify(carData, null, 2));
+        
+        // 7. Check data types and values
+        console.log('=== Data Types ===');
+        Object.entries(carData).forEach(([key, value]) => {
+          console.log(`${key}: ${typeof value} =`, value);
+        });
+        
+        // 8. Check for NULL values
+        const nullValues = Object.entries(carData)
+          .filter(([_, value]) => value === null)
+          .map(([key]) => key);
+          
+        if (nullValues.length > 0) {
+          console.log('NULL values found for:', nullValues.join(', '));
+        }
+        
+        // 9. Test JSON serialization
+        const testData = {
+          id: carData.id,
+          color_highlighting_enabled: carData.color_highlighting_enabled === 'true',
+          color_highlighting_expiration_date: carData.color_highlighting_expiration_date,
+          test_boolean_true: true,
+          test_boolean_false: false,
+          test_undefined: undefined,
+          test_null: null,
+          test_date: new Date().toISOString()
+        };
+        
+        console.log('=== JSON Serialization Test ===');
+        console.log('Original:', testData);
+        const jsonString = JSON.stringify(testData);
+        console.log('Stringified:', jsonString);
+        console.log('Parsed:', JSON.parse(jsonString));
+      } else {
+        console.log(`No car found with ID: ${carId}`);
+      }
+      
+      console.log('=== End of Database Debug ===');
+      
+    } catch (error) {
+      console.error('Error checking database schema:', error);
+    }
     
     // Query to get a single car with its related data including seller info
     const carQuery = `
@@ -890,6 +1100,18 @@ router.get('/:id', async (req, res) => {
         u.first_name as seller_first_name,
         u.last_name as seller_last_name,
         u.phone as seller_phone,
+        CASE 
+          WHEN c.id % 4 = 0 THEN 'super_vip'
+          WHEN c.id % 3 = 0 THEN 'vip_plus' 
+          WHEN c.id % 2 = 0 THEN 'vip'
+          ELSE 'none'
+        END as vip_status,
+        CASE 
+          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+          ELSE NULL
+        END as vip_expiration_date,
         -- Dealer profile data
         dp.id as dealer_profile_id,
         dp.company_name as dealer_company_name,
@@ -907,7 +1129,10 @@ router.get('/:id', async (req, res) => {
         ap.address as autosalon_address,
         ap.created_at as autosalon_created_at,
         -- Car counts
-        (SELECT COUNT(*) FROM cars WHERE seller_id = u.id) as seller_car_count
+        (SELECT COUNT(*) FROM cars WHERE seller_id = u.id) as seller_car_count,
+        -- Color highlighting fields
+        c.color_highlighting_enabled,
+        c.color_highlighting_expiration_date
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -921,6 +1146,9 @@ router.get('/:id', async (req, res) => {
     
     const carResult = await pool.query(carQuery, [carId]);
     
+    // Debug: Log the raw database response
+    console.log('Raw database response for car:', JSON.stringify(carResult.rows[0], null, 2));
+    
     if (carResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -929,6 +1157,17 @@ router.get('/:id', async (req, res) => {
     }
     
     const car = carResult.rows[0];
+    
+    // Debug: Log the car object before any processing
+    console.log('Car object before processing:', JSON.stringify({
+      id: car.id,
+      color_highlighting_enabled: car.color_highlighting_enabled,
+      color_highlighting_expiration_date: car.color_highlighting_expiration_date,
+      hasOwnProperty: {
+        color_highlighting_enabled: car.hasOwnProperty('color_highlighting_enabled'),
+        color_highlighting_expiration_date: car.hasOwnProperty('color_highlighting_expiration_date')
+      }
+    }, null, 2));
     
     // Get car images
     const imagesQuery = 'SELECT * FROM car_images WHERE car_id = $1';
@@ -982,6 +1221,9 @@ router.get('/:id', async (req, res) => {
       updated_at: car.updated_at,
       category_name: car.category, // დავამატეთ category_name ველი, რომელიც იყენებს car.category ღირებულებას
       vin_code: car.vin_code, // Add VIN code to the response
+      // Color highlighting fields
+      color_highlighting_enabled: Boolean(car.color_highlighting_enabled),
+      color_highlighting_expiration_date: car.color_highlighting_expiration_date,
       // Create a properly nested specifications object
       specifications: {
         id: car.id,

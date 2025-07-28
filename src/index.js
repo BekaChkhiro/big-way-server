@@ -29,6 +29,7 @@ const vipPricingRoutes = require('./routes/vipPricingRoutes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const dealersRoutes = require('./routes/dealers.routes');
 const autosalonsRoutes = require('./routes/autosalons.routes');
+const autoRenewalRoutes = require('./routes/autoRenewal.routes');
 const specs = require('./docs/swagger');
 const { pg: pool } = require('../config/db.config');
 const VipPricing = require('./models/VipPricing');
@@ -110,6 +111,7 @@ app.use('/api', vipPricingRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dealers', dealersRoutes);
 app.use('/api/autosalons', autosalonsRoutes);
+app.use('/api/auto-renewal', autoRenewalRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Big Way API' });
