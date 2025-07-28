@@ -8,8 +8,19 @@ const { validationResult } = require('express-validator');
  */
 exports.getAllVipPricing = async (req, res) => {
   try {
-    // Get all pricing records
-    const vipPricing = await VipPricing.findAll();
+    const { role, grouped } = req.query;
+    
+    // If grouped by role is requested
+    if (grouped === 'true') {
+      const groupedPricing = await VipPricing.findAllGroupedByRole();
+      return res.status(200).json({
+        success: true,
+        data: groupedPricing
+      });
+    }
+    
+    // Get all pricing records, optionally filtered by role
+    const vipPricing = await VipPricing.findAll(role);
 
     return res.status(200).json({
       success: true,
@@ -80,16 +91,30 @@ exports.updateVipPricing = async (req, res) => {
     for (const price of prices) {
       const serviceType = price.service_type || price.vip_status;
       
-      await VipPricing.upsert({
-        service_type: serviceType,
-        price: price.price,
-        duration_days: price.duration_days || 1,
-        is_daily_price: price.is_daily_price !== undefined ? price.is_daily_price : true
-      });
+      try {
+        console.log('Upserting price:', {
+          service_type: serviceType,
+          price: price.price,
+          duration_days: price.duration_days || 1,
+          is_daily_price: price.is_daily_price !== undefined ? price.is_daily_price : true,
+          user_role: price.user_role || 'user'
+        });
+        
+        await VipPricing.upsert({
+          service_type: serviceType,
+          price: price.price,
+          duration_days: price.duration_days || 1,
+          is_daily_price: price.is_daily_price !== undefined ? price.is_daily_price : true,
+          user_role: price.user_role || 'user'
+        });
+      } catch (upsertError) {
+        console.error('Error upserting individual price:', upsertError);
+        throw upsertError;
+      }
     }
 
     // Get the updated pricing
-    const updatedPricing = await VipPricing.findAll();
+    const updatedPricing = await VipPricing.findAllGroupedByRole();
 
     return res.status(200).json({
       success: true,
@@ -113,7 +138,8 @@ exports.updateVipPricing = async (req, res) => {
  */
 exports.getVipPackages = async (req, res) => {
   try {
-    const vipPackages = await VipPricing.findVipPackages();
+    const { role } = req.query;
+    const vipPackages = await VipPricing.findVipPackages(role);
 
     return res.status(200).json({
       success: true,
@@ -136,7 +162,8 @@ exports.getVipPackages = async (req, res) => {
  */
 exports.getAdditionalServices = async (req, res) => {
   try {
-    const additionalServices = await VipPricing.findAdditionalServices();
+    const { role } = req.query;
+    const additionalServices = await VipPricing.findAdditionalServices(role);
 
     return res.status(200).json({
       success: true,
@@ -147,6 +174,90 @@ exports.getAdditionalServices = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch additional services',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get VIP pricing for the current user based on their role
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getUserVipPricing = async (req, res) => {
+  try {
+    // Debug: log the entire user object
+    console.log('getUserVipPricing - Full req.user object:', JSON.stringify(req.user, null, 2));
+    
+    // Get user role from the authenticated user
+    const userRole = req.user?.role || 'user';
+    console.log(`Getting VIP pricing for user role: ${userRole}`);
+    console.log('Available roles in system:', ['user', 'dealer', 'autosalon']);
+    
+    // Validate that the role is one of the expected values
+    const validRoles = ['user', 'dealer', 'autosalon'];
+    const finalRole = validRoles.includes(userRole) ? userRole : 'user';
+    
+    if (finalRole !== userRole) {
+      console.warn(`Invalid user role '${userRole}' detected, defaulting to 'user'`);
+    }
+    
+    // Get all pricing for this user's role
+    let vipPricing = await VipPricing.findAll(finalRole);
+    
+    // If no pricing found for this role, ensure it gets created
+    if (vipPricing.length === 0) {
+      console.log(`No pricing data found for role ${finalRole}, creating default entries...`);
+      
+      const serviceTypes = [
+        { service_type: 'free', price: 0, duration_days: 30, is_daily_price: false },
+        { service_type: 'vip', price: 2, duration_days: 1, is_daily_price: true },
+        { service_type: 'vip_plus', price: 5, duration_days: 1, is_daily_price: true },
+        { service_type: 'super_vip', price: 7, duration_days: 1, is_daily_price: true },
+        { service_type: 'color_highlighting', price: 0.5, duration_days: 1, is_daily_price: true },
+        { service_type: 'auto_renewal', price: 0.5, duration_days: 1, is_daily_price: true }
+      ];
+      
+      for (const service of serviceTypes) {
+        try {
+          await VipPricing.upsert({
+            ...service,
+            user_role: finalRole
+          });
+        } catch (error) {
+          console.error(`Error creating default pricing for ${finalRole}/${service.service_type}:`, error);
+        }
+      }
+      
+      // Fetch again after creating defaults
+      vipPricing = await VipPricing.findAll(finalRole);
+    }
+    
+    // Separate into packages and services
+    const packages = vipPricing.filter(p => 
+      ['free', 'vip', 'vip_plus', 'super_vip'].includes(p.service_type)
+    );
+    
+    const services = vipPricing.filter(p => 
+      ['color_highlighting', 'auto_renewal'].includes(p.service_type)
+    );
+
+    console.log(`Found ${packages.length} packages and ${services.length} services for role ${finalRole}`);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        role: finalRole,
+        packages,
+        services,
+        all: vipPricing
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user VIP pricing:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user VIP pricing',
       error: error.message
     });
   }

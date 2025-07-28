@@ -647,38 +647,63 @@ class PartsController {
           return res.status(403).json({ message: 'Part does not belong to user' });
         }
       
-      // Calculate VIP pricing
-      let pricePerDay;
-      switch (vipStatus) {
-        case 'none':
-          pricePerDay = 0;
-          break;
-        case 'vip':
-          pricePerDay = 2;
-          break;
-        case 'vip_plus':
-          pricePerDay = 5;
-          break;
-        case 'super_vip':
-          pricePerDay = 7;
-          break;
-        default:
-          await client.query('ROLLBACK');
-          return res.status(400).json({ message: 'Invalid VIP status' });
+      // Get role-based pricing from database
+      const VipPricing = require('../../models/VipPricing');
+      const userRole = req.user?.role || 'user';
+      
+      let pricePerDay = 0;
+      try {
+        // Fetch the price for this specific VIP status and user role
+        const vipPricing = await VipPricing.findByServiceType(vipStatus, userRole);
+        pricePerDay = vipPricing ? vipPricing.price : 0;
+        
+        console.log(`Charging user with role ${userRole} price ${pricePerDay} for VIP status ${vipStatus}`);
+      } catch (error) {
+        console.error('Error fetching VIP pricing:', error);
+        // Fall back to role-based default pricing
+        const fallbackPrices = {
+          'none': 0,
+          'vip': userRole === 'dealer' ? 1.5 : userRole === 'autosalon' ? 1.8 : 2,
+          'vip_plus': userRole === 'dealer' ? 3.75 : userRole === 'autosalon' ? 4.5 : 5,
+          'super_vip': userRole === 'dealer' ? 5.25 : userRole === 'autosalon' ? 6.3 : 7
+        };
+        pricePerDay = fallbackPrices[vipStatus] || 0;
+        console.log(`Using fallback price ${pricePerDay} for role ${userRole} and VIP status ${vipStatus}`);
       }
       
       // Calculate base VIP price
       const baseVipPrice = pricePerDay * validDays;
       
+      // Get role-based additional services pricing from database
+      let colorHighlightingPrice = 0.5; // Default fallback
+      let autoRenewalPrice = 0.5; // Default fallback
+      
+      try {
+        const colorHighlightingPricing = await VipPricing.findByServiceType('color_highlighting', userRole);
+        const autoRenewalPricing = await VipPricing.findByServiceType('auto_renewal', userRole);
+        
+        if (colorHighlightingPricing) {
+          colorHighlightingPrice = colorHighlightingPricing.price;
+        }
+        if (autoRenewalPricing) {
+          autoRenewalPrice = autoRenewalPricing.price;
+        }
+        
+        console.log(`Additional services pricing for role ${userRole}: color highlighting ${colorHighlightingPrice}, auto renewal ${autoRenewalPrice}`);
+      } catch (error) {
+        console.error('Error fetching additional services pricing:', error);
+        // Using fallback prices already set above
+      }
+
       // Calculate additional services cost
       let additionalServicesCost = 0;
       if (colorHighlighting) {
         const colorDays = Number(colorHighlightingDays) || validDays;
-        additionalServicesCost += 0.5 * colorDays;
+        additionalServicesCost += colorHighlightingPrice * colorDays;
       }
       if (autoRenewal) {
         const renewalDays = Number(autoRenewalDays) || validDays;
-        additionalServicesCost += 0.5 * renewalDays;
+        additionalServicesCost += autoRenewalPrice * renewalDays;
       }
       
       // Calculate total price

@@ -283,22 +283,46 @@ const vipController = {
         });
       }
       
-      // Use fixed prices matching the database pricing
-      const fixedPrices = {
-        'none': 0, // Standard package, no VIP upgrade
-        'vip': 2, // Updated from 2.5 to match database
-        'vip_plus': 5,
-        'super_vip': 7 // Updated from 8 to match database
-      };
+      // Get role-based pricing from database
+      const VipPricing = require('../models/VipPricing');
+      const userRole = req.user?.role || 'user';
       
-      // Additional services pricing
-      const additionalServicesPrices = {
+      let pricePerDay = 0;
+      let additionalServicesPrices = {
         'color_highlighting': 0.5,
         'auto_renewal': 0.5
       };
       
-      // Get price per day based on VIP status
-      const pricePerDay = fixedPrices[vipStatus] || 0;
+      try {
+        // Fetch the price for this specific VIP status and user role
+        const vipPricing = await VipPricing.findByServiceType(vipStatus, userRole);
+        pricePerDay = vipPricing ? vipPricing.price : 0;
+        
+        // Fetch additional services pricing for user role
+        const colorHighlightingPricing = await VipPricing.findByServiceType('color_highlighting', userRole);
+        const autoRenewalPricing = await VipPricing.findByServiceType('auto_renewal', userRole);
+        
+        if (colorHighlightingPricing) {
+          additionalServicesPrices.color_highlighting = colorHighlightingPricing.price;
+        }
+        if (autoRenewalPricing) {
+          additionalServicesPrices.auto_renewal = autoRenewalPricing.price;
+        }
+        
+        console.log(`Charging user with role ${userRole} price ${pricePerDay} for VIP status ${vipStatus}`);
+        console.log(`Additional services pricing for role ${userRole}:`, additionalServicesPrices);
+      } catch (error) {
+        console.error('Error fetching VIP pricing:', error);
+        // Fall back to role-based default pricing
+        const fallbackPrices = {
+          'none': 0,
+          'vip': userRole === 'dealer' ? 1.5 : userRole === 'autosalon' ? 1.8 : 2,
+          'vip_plus': userRole === 'dealer' ? 3.75 : userRole === 'autosalon' ? 4.5 : 5,
+          'super_vip': userRole === 'dealer' ? 5.25 : userRole === 'autosalon' ? 6.3 : 7
+        };
+        pricePerDay = fallbackPrices[vipStatus] || 0;
+        console.log(`Using fallback price ${pricePerDay} for role ${userRole} and VIP status ${vipStatus}`);
+      }
       
       // Calculate base VIP price
       const baseVipPrice = pricePerDay * validDays;
@@ -563,6 +587,52 @@ const vipController = {
     }
   },
   
+  /**
+   * Purchase comprehensive VIP package with additional services
+   * This method acts as a wrapper around purchaseVipStatus with proper parameter mapping
+   * @param {*} req 
+   * @param {*} res 
+   */
+  async purchaseVipPackage(req, res) {
+    try {
+      const { carId } = req.params;
+      const { 
+        vip_status, 
+        vip_days, 
+        color_highlighting, 
+        color_highlighting_days, 
+        auto_renewal, 
+        auto_renewal_days 
+      } = req.body;
+      
+      console.log(`VIP Package API - Purchase request received for car ${carId}:`);
+      console.log('Request body:', JSON.stringify(req.body));
+      
+      // Map parameters to the format expected by purchaseVipStatus
+      const mappedBody = {
+        vipStatus: vip_status,
+        days: vip_days,
+        colorHighlighting: color_highlighting,
+        colorHighlightingDays: color_highlighting_days,
+        autoRenewal: auto_renewal,
+        autoRenewalDays: auto_renewal_days
+      };
+      
+      // Modify the request object to have the expected format
+      req.body = mappedBody;
+      
+      // Call the existing purchaseVipStatus method
+      return await vipController.purchaseVipStatus(req, res);
+      
+    } catch (error) {
+      console.error('Error in purchaseVipPackage:', error);
+      return res.status(500).json({ 
+        error: 'Failed to purchase VIP package',
+        details: error.message
+      });
+    }
+  },
+
   /**
    * Get all available VIP status types
    * @param {*} req 
