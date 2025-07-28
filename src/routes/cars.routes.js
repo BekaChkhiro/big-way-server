@@ -670,18 +670,9 @@ router.get('/', async (req, res) => {
         spec.engine_size, spec.steering_wheel, spec.cylinders, spec.airbags_count,
         spec.drive_type, spec.interior_material, spec.interior_color, spec.color,
         c.color_highlighting_enabled, c.color_highlighting_expiration_date,
-        CASE 
-          WHEN c.id % 4 = 0 THEN 'super_vip'
-          WHEN c.id % 3 = 0 THEN 'vip_plus' 
-          WHEN c.id % 2 = 0 THEN 'vip'
-          ELSE 'none'
-        END as vip_status,
-        CASE 
-          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-          ELSE NULL
-        END as vip_expiration_date
+        c.vip_status,
+        c.vip_expiration_date,
+        c.vip_active
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -756,7 +747,8 @@ router.get('/', async (req, res) => {
         color_highlighting_expiration_date: car.color_highlighting_expiration_date || null,
         // Add VIP status fields
         vip_status: car.vip_status || 'none',
-        vip_expiration_date: car.vip_expiration_date || null
+        vip_expiration_date: car.vip_expiration_date || null,
+        vip_active: car.vip_active || false
       };
     }));
     
@@ -1111,18 +1103,9 @@ router.get('/:id', async (req, res) => {
         u.first_name as seller_first_name,
         u.last_name as seller_last_name,
         u.phone as seller_phone,
-        CASE 
-          WHEN c.id % 4 = 0 THEN 'super_vip'
-          WHEN c.id % 3 = 0 THEN 'vip_plus' 
-          WHEN c.id % 2 = 0 THEN 'vip'
-          ELSE 'none'
-        END as vip_status,
-        CASE 
-          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-          ELSE NULL
-        END as vip_expiration_date,
+        c.vip_status,
+        c.vip_expiration_date,
+        c.vip_active,
         -- Dealer profile data
         dp.id as dealer_profile_id,
         dp.company_name as dealer_company_name,

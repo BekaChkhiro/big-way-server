@@ -139,18 +139,8 @@ class CarModel {
     const query = `
       SELECT 
         c.*,
-        CASE 
-          WHEN c.id % 4 = 0 THEN 'super_vip'
-          WHEN c.id % 3 = 0 THEN 'vip_plus' 
-          WHEN c.id % 2 = 0 THEN 'vip'
-          ELSE 'none'
-        END as vip_status,
-        CASE 
-          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-          ELSE NULL
-        END as vip_expiration_date,
+        c.vip_status,
+        c.vip_expiration_date,
         b.name as brand,
         cat.name as category,
         c.author_name,
@@ -344,18 +334,9 @@ class CarModel {
     const query = `
       SELECT 
         c.*,
-        CASE 
-          WHEN c.id % 4 = 0 THEN 'super_vip'
-          WHEN c.id % 3 = 0 THEN 'vip_plus' 
-          WHEN c.id % 2 = 0 THEN 'vip'
-          ELSE 'none'
-        END as vip_status,
-        CASE 
-          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-          ELSE NULL
-        END as vip_expiration_date,
+        c.vip_status,
+        c.vip_expiration_date,
+        c.vip_active,
         b.name as brand,
         cat.name as category,
         COALESCE(
@@ -367,60 +348,37 @@ class CarModel {
             )
           ) FROM car_images ci WHERE ci.car_id = c.id),
           '[]'
-        ) as images
+        ) as images,
+        json_build_object(
+          'id', s.id,
+          'mileage', s.mileage,
+          'mileage_unit', s.mileage_unit,
+          'fuel_type', s.fuel_type,
+          'transmission', s.transmission
+        ) as specifications,
+        json_build_object(
+          'id', l.id,
+          'city', l.city,
+          'country', l.country,
+          'location_type', l.location_type
+        ) as location
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
-      WHERE (
-        CASE 
-          WHEN c.id % 4 = 0 THEN 'super_vip'
-          WHEN c.id % 3 = 0 THEN 'vip_plus' 
-          WHEN c.id % 2 = 0 THEN 'vip'
-          ELSE 'none'
-        END
-      ) = $1
-      AND (
-        CASE 
-          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-          ELSE NULL
-        END IS NULL OR 
-        CASE 
-          WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-          WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-          WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-          ELSE NULL
-        END > NOW()
-      )
+      LEFT JOIN specifications s ON c.specification_id = s.id
+      LEFT JOIN locations l ON c.location_id = l.id
+      WHERE c.vip_status = $1
+      AND c.vip_active = true
+      AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW())
       ORDER BY c.updated_at DESC
       LIMIT $2 OFFSET $3
     `;
     
     const countQuery = `
       SELECT COUNT(*) FROM cars
-      WHERE (
-        CASE 
-          WHEN id % 4 = 0 THEN 'super_vip'
-          WHEN id % 3 = 0 THEN 'vip_plus' 
-          WHEN id % 2 = 0 THEN 'vip'
-          ELSE 'none'
-        END
-      ) = $1
-      AND (
-        CASE 
-          WHEN id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-          WHEN id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-          WHEN id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-          ELSE NULL
-        END IS NULL OR 
-        CASE 
-          WHEN id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-          WHEN id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-          WHEN id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-          ELSE NULL
-        END > NOW()
-      )
+      WHERE vip_status = $1
+      AND vip_active = true
+      AND (vip_expiration_date IS NULL OR vip_expiration_date > NOW())
     `;
     
     const [result, countResult] = await Promise.all([
