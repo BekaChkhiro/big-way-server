@@ -653,8 +653,8 @@ class PartsController {
       
       let pricePerDay = 0;
       try {
-        // Fetch the price for this specific VIP status and user role
-        const vipPricing = await VipPricing.findByServiceType(vipStatus, userRole);
+        // Fetch the price for this specific VIP status and user role for parts category
+        const vipPricing = await VipPricing.findByServiceType(vipStatus, userRole, 'parts');
         pricePerDay = vipPricing ? vipPricing.price : 0;
         
         console.log(`Charging user with role ${userRole} price ${pricePerDay} for VIP status ${vipStatus}`);
@@ -679,8 +679,8 @@ class PartsController {
       let autoRenewalPrice = 0.5; // Default fallback
       
       try {
-        const colorHighlightingPricing = await VipPricing.findByServiceType('color_highlighting', userRole);
-        const autoRenewalPricing = await VipPricing.findByServiceType('auto_renewal', userRole);
+        const colorHighlightingPricing = await VipPricing.findByServiceType('color_highlighting', userRole, 'parts');
+        const autoRenewalPricing = await VipPricing.findByServiceType('auto_renewal', userRole, 'parts');
         
         if (colorHighlightingPricing) {
           colorHighlightingPrice = colorHighlightingPricing.price;

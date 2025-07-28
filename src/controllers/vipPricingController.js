@@ -8,11 +8,11 @@ const { validationResult } = require('express-validator');
  */
 exports.getAllVipPricing = async (req, res) => {
   try {
-    const { role, grouped } = req.query;
+    const { role, grouped, category = 'cars' } = req.query;
     
     // If grouped by role is requested
     if (grouped === 'true') {
-      const groupedPricing = await VipPricing.findAllGroupedByRole();
+      const groupedPricing = await VipPricing.findAllGroupedByRole(category);
       return res.status(200).json({
         success: true,
         data: groupedPricing
@@ -20,7 +20,7 @@ exports.getAllVipPricing = async (req, res) => {
     }
     
     // Get all pricing records, optionally filtered by role
-    const vipPricing = await VipPricing.findAll(role);
+    const vipPricing = await VipPricing.findAll(role, category);
 
     return res.status(200).json({
       success: true,
@@ -105,7 +105,8 @@ exports.updateVipPricing = async (req, res) => {
           price: price.price,
           duration_days: price.duration_days || 1,
           is_daily_price: price.is_daily_price !== undefined ? price.is_daily_price : true,
-          user_role: price.user_role || 'user'
+          user_role: price.user_role || 'user',
+          category: price.category || 'cars'
         });
       } catch (upsertError) {
         console.error('Error upserting individual price:', upsertError);
@@ -113,8 +114,9 @@ exports.updateVipPricing = async (req, res) => {
       }
     }
 
-    // Get the updated pricing
-    const updatedPricing = await VipPricing.findAllGroupedByRole();
+    // Get the updated pricing for the appropriate category
+    const category = prices[0]?.category || 'cars';
+    const updatedPricing = await VipPricing.findAllGroupedByRole(category);
 
     return res.status(200).json({
       success: true,
@@ -138,8 +140,8 @@ exports.updateVipPricing = async (req, res) => {
  */
 exports.getVipPackages = async (req, res) => {
   try {
-    const { role } = req.query;
-    const vipPackages = await VipPricing.findVipPackages(role);
+    const { role, category = 'cars' } = req.query;
+    const vipPackages = await VipPricing.findVipPackages(role, category);
 
     return res.status(200).json({
       success: true,
@@ -162,8 +164,8 @@ exports.getVipPackages = async (req, res) => {
  */
 exports.getAdditionalServices = async (req, res) => {
   try {
-    const { role } = req.query;
-    const additionalServices = await VipPricing.findAdditionalServices(role);
+    const { role, category = 'cars' } = req.query;
+    const additionalServices = await VipPricing.findAdditionalServices(role, category);
 
     return res.status(200).json({
       success: true,
@@ -189,9 +191,10 @@ exports.getUserVipPricing = async (req, res) => {
     // Debug: log the entire user object
     console.log('getUserVipPricing - Full req.user object:', JSON.stringify(req.user, null, 2));
     
-    // Get user role from the authenticated user
+    // Get user role from the authenticated user and category from query
     const userRole = req.user?.role || 'user';
-    console.log(`Getting VIP pricing for user role: ${userRole}`);
+    const { category = 'cars' } = req.query;
+    console.log(`Getting VIP pricing for user role: ${userRole}, category: ${category}`);
     console.log('Available roles in system:', ['user', 'dealer', 'autosalon']);
     
     // Validate that the role is one of the expected values
@@ -202,8 +205,8 @@ exports.getUserVipPricing = async (req, res) => {
       console.warn(`Invalid user role '${userRole}' detected, defaulting to 'user'`);
     }
     
-    // Get all pricing for this user's role
-    let vipPricing = await VipPricing.findAll(finalRole);
+    // Get all pricing for this user's role and category
+    let vipPricing = await VipPricing.findAll(finalRole, category);
     
     // If no pricing found for this role, ensure it gets created
     if (vipPricing.length === 0) {
@@ -222,7 +225,8 @@ exports.getUserVipPricing = async (req, res) => {
         try {
           await VipPricing.upsert({
             ...service,
-            user_role: finalRole
+            user_role: finalRole,
+            category: category
           });
         } catch (error) {
           console.error(`Error creating default pricing for ${finalRole}/${service.service_type}:`, error);
@@ -230,7 +234,7 @@ exports.getUserVipPricing = async (req, res) => {
       }
       
       // Fetch again after creating defaults
-      vipPricing = await VipPricing.findAll(finalRole);
+      vipPricing = await VipPricing.findAll(finalRole, category);
     }
     
     // Separate into packages and services

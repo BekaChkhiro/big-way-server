@@ -82,7 +82,16 @@ class VipPricing {
         }
       }
       
-      // Create new table with correct structure including role-based pricing
+      // Create enum type for category if it doesn't exist
+      await client.query(`
+        DO $$ BEGIN
+            CREATE TYPE vip_category_enum AS ENUM ('cars', 'parts');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+      `);
+      
+      // Create new table with correct structure including role-based pricing and category
       await client.query(`
         CREATE TABLE IF NOT EXISTS vip_pricing (
           id SERIAL PRIMARY KEY,
@@ -91,9 +100,10 @@ class VipPricing {
           duration_days INTEGER DEFAULT 1,
           is_daily_price BOOLEAN DEFAULT FALSE,
           user_role public.user_role DEFAULT 'user',
+          category vip_category_enum DEFAULT 'cars',
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT vip_pricing_service_type_user_role_key UNIQUE (service_type, user_role)
+          CONSTRAINT vip_pricing_service_type_user_role_category_key UNIQUE (service_type, user_role, category)
         )
       `);
       
@@ -112,13 +122,17 @@ class VipPricing {
           { service_type: 'auto_renewal', price: 0.5, duration_days: 1, is_daily_price: true }
         ];
         
+        const categories = ['cars', 'parts'];
+        
         for (const role of roles) {
-          for (const service of services) {
-            await client.query(`
-              INSERT INTO vip_pricing (service_type, price, duration_days, is_daily_price, user_role) 
-              VALUES ($1, $2, $3, $4, $5)
-              ON CONFLICT (service_type, user_role) DO NOTHING
-            `, [service.service_type, service.price, service.duration_days, service.is_daily_price, role]);
+          for (const category of categories) {
+            for (const service of services) {
+              await client.query(`
+                INSERT INTO vip_pricing (service_type, price, duration_days, is_daily_price, user_role, category) 
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (service_type, user_role, category) DO NOTHING
+              `, [service.service_type, service.price, service.duration_days, service.is_daily_price, role, category]);
+            }
           }
         }
       }
@@ -133,15 +147,15 @@ class VipPricing {
   }
 
   /**
-   * Find all VIP pricing records (optionally filtered by role)
+   * Find all VIP pricing records (optionally filtered by role and category)
    */
-  static async findAll(userRole = null) {
+  static async findAll(userRole = null, category = 'cars') {
     try {
-      let query = 'SELECT * FROM vip_pricing';
-      const params = [];
+      let query = 'SELECT * FROM vip_pricing WHERE category = $1';
+      const params = [category];
       
       if (userRole) {
-        query += ' WHERE user_role = $1';
+        query += ' AND user_role = $2';
         params.push(userRole);
       }
       
@@ -156,12 +170,13 @@ class VipPricing {
   }
 
   /**
-   * Find all VIP pricing records grouped by role
+   * Find all VIP pricing records grouped by role for a specific category
    */
-  static async findAllGroupedByRole() {
+  static async findAllGroupedByRole(category = 'cars') {
     try {
       const result = await pool.query(`
         SELECT * FROM vip_pricing 
+        WHERE category = $1
         ORDER BY user_role, 
         CASE 
           WHEN service_type = 'free' THEN 0 
@@ -172,7 +187,7 @@ class VipPricing {
           WHEN service_type = 'auto_renewal' THEN 5
           ELSE 6 
         END
-      `);
+      `, [category]);
       
       // Initialize all roles to ensure they exist
       const grouped = {
@@ -212,7 +227,8 @@ class VipPricing {
                 price: defaultPrice,
                 duration_days: defaultDays,
                 is_daily_price: serviceType !== 'free',
-                user_role: role
+                user_role: role,
+                category: category
               });
               grouped[role].push(newRecord);
             } catch (error) {
@@ -247,7 +263,7 @@ class VipPricing {
   /**
    * Update or insert a VIP pricing record
    */
-  static async upsert({ service_type, price, duration_days, is_daily_price, user_role = 'user' }) {
+  static async upsert({ service_type, price, duration_days, is_daily_price, user_role = 'user', category = 'cars' }) {
     try {
       // Validate user_role
       const validRoles = ['user', 'dealer', 'autosalon'];
@@ -260,15 +276,16 @@ class VipPricing {
         price,
         duration_days,
         is_daily_price,
-        user_role
+        user_role,
+        category
       });
       
       // First, try to find existing record
       const existingQuery = `
         SELECT id FROM vip_pricing 
-        WHERE service_type = $1 AND user_role = $2
+        WHERE service_type = $1 AND user_role = $2 AND category = $3
       `;
-      const existingResult = await pool.query(existingQuery, [service_type, user_role]);
+      const existingResult = await pool.query(existingQuery, [service_type, user_role, category]);
       
       let result;
       if (existingResult.rows.length > 0) {
@@ -276,17 +293,17 @@ class VipPricing {
         result = await pool.query(
           `UPDATE vip_pricing 
            SET price = $1, duration_days = $2, is_daily_price = $3, updated_at = CURRENT_TIMESTAMP
-           WHERE service_type = $4 AND user_role = $5
+           WHERE service_type = $4 AND user_role = $5 AND category = $6
            RETURNING *`,
-          [price, duration_days, is_daily_price, service_type, user_role]
+          [price, duration_days, is_daily_price, service_type, user_role, category]
         );
       } else {
         // Insert new record
         result = await pool.query(
-          `INSERT INTO vip_pricing (service_type, price, duration_days, is_daily_price, user_role, updated_at) 
-           VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+          `INSERT INTO vip_pricing (service_type, price, duration_days, is_daily_price, user_role, category, updated_at) 
+           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
            RETURNING *`,
-          [service_type, price, duration_days, is_daily_price, user_role]
+          [service_type, price, duration_days, is_daily_price, user_role, category]
         );
       }
       
@@ -294,19 +311,19 @@ class VipPricing {
       return result.rows[0];
     } catch (error) {
       console.error('Error upserting VIP pricing record:', error);
-      console.error('Query parameters:', [service_type, price, duration_days, is_daily_price, user_role]);
+      console.error('Query parameters:', [service_type, price, duration_days, is_daily_price, user_role, category]);
       throw error;
     }
   }
 
   /**
-   * Find a VIP pricing record by service type and role
+   * Find a VIP pricing record by service type, role and category
    */
-  static async findByServiceType(service_type, user_role = 'user') {
+  static async findByServiceType(service_type, user_role = 'user', category = 'cars') {
     try {
       const result = await pool.query(
-        'SELECT * FROM vip_pricing WHERE service_type = $1 AND user_role = $2', 
-        [service_type, user_role]
+        'SELECT * FROM vip_pricing WHERE service_type = $1 AND user_role = $2 AND category = $3', 
+        [service_type, user_role, category]
       );
       return result.rows[0];
     } catch (error) {
@@ -318,21 +335,21 @@ class VipPricing {
   /**
    * Get VIP status pricing (backwards compatibility)
    */
-  static async findByStatus(vip_status, user_role = 'user') {
-    return this.findByServiceType(vip_status, user_role);
+  static async findByStatus(vip_status, user_role = 'user', category = 'cars') {
+    return this.findByServiceType(vip_status, user_role, category);
   }
 
   /**
    * Get all VIP packages only (excluding additional services)
    */
-  static async findVipPackages(user_role = null) {
+  static async findVipPackages(user_role = null, category = 'cars') {
     try {
       let query = `SELECT * FROM vip_pricing 
-         WHERE service_type IN ('free', 'vip', 'vip_plus', 'super_vip')`;
-      const params = [];
+         WHERE service_type IN ('free', 'vip', 'vip_plus', 'super_vip') AND category = $1`;
+      const params = [category];
       
       if (user_role) {
-        query += ' AND user_role = $1';
+        query += ' AND user_role = $2';
         params.push(user_role);
       }
       
@@ -349,14 +366,14 @@ class VipPricing {
   /**
    * Get all additional services only
    */
-  static async findAdditionalServices(user_role = null) {
+  static async findAdditionalServices(user_role = null, category = 'cars') {
     try {
       let query = `SELECT * FROM vip_pricing 
-         WHERE service_type IN ('color_highlighting', 'auto_renewal')`;
-      const params = [];
+         WHERE service_type IN ('color_highlighting', 'auto_renewal') AND category = $1`;
+      const params = [category];
       
       if (user_role) {
-        query += ' AND user_role = $1';
+        query += ' AND user_role = $2';
         params.push(user_role);
       }
       
