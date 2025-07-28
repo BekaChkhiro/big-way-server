@@ -12,6 +12,12 @@ const { upload, processAndUpload, setCacheHeaders } = require('../middlewares/up
 // Use the upload middleware configured for AWS S3
 const carUpload = upload;
 
+// Test endpoint to verify VIP data
+router.get('/api-test/vip', async (req, res) => {
+  const testCar = { id: 4, vip_status: 'super_vip' };
+  res.json({ test: 'VIP data endpoint', car: testCar });
+});
+
 // Get all brands
 router.get('/brands', async (req, res) => {
   try {
@@ -747,11 +753,16 @@ router.get('/', async (req, res) => {
         })),
         // Add color highlighting fields
         color_highlighting_enabled: car.color_highlighting_enabled || false,
-        color_highlighting_expiration_date: car.color_highlighting_expiration_date || null
+        color_highlighting_expiration_date: car.color_highlighting_expiration_date || null,
+        // Add VIP status fields
+        vip_status: car.vip_status || 'none',
+        vip_expiration_date: car.vip_expiration_date || null
       };
     }));
     
     console.log(`Found ${cars.length} cars, with total of ${totalCars} matching filter criteria.`);
+    console.log(`Sample car VIP status:`, cars.length > 0 ? cars[0].vip_status : 'no cars');
+    console.log('VIP data check - first car:', cars.length > 0 ? JSON.stringify({id: cars[0].id, vip_status: cars[0].vip_status}) : 'no cars');
     
     // Return both cars and pagination metadata
     res.json({
