@@ -837,6 +837,7 @@ exports.getTransactionHistory = async (req, res) => {
       SELECT id, amount, transaction_type as type, description, status, created_at
       FROM balance_transactions
       WHERE user_id = $1
+        AND transaction_type NOT IN ('auto_renewal_car', 'auto_renewal_part')
       ORDER BY created_at DESC
     `;
     
@@ -903,11 +904,13 @@ exports.getAdminTransactions = async (req, res) => {
     const sampleResult = await pool.query(sampleQuery);
     console.log('Sample transaction:', sampleResult.rows[0]);
     
-    // მთავარი მოთხოვნა
+    // მთავარი მოთხოვნა - exclude auto-renewal transactions by default
+    const includeAutoRenewals = req.query.includeAutoRenewals === 'true';
     const transactionsQuery = `
       SELECT id, amount, transaction_type as type, description, status, 
             created_at, reference_id, user_id 
       FROM balance_transactions
+      ${includeAutoRenewals ? '' : "WHERE transaction_type NOT IN ('auto_renewal_car', 'auto_renewal_part')"}
       ORDER BY created_at DESC
     `;
     

@@ -9,7 +9,7 @@ class AutoRenewalScheduler {
 
   /**
    * Start the auto-renewal scheduler
-   * Runs every day at 2:00 AM to avoid peak traffic
+   * Runs every day at midnight (00:00)
    */
   start() {
     if (this.isRunning) {
@@ -17,8 +17,8 @@ class AutoRenewalScheduler {
       return;
     }
 
-    // Schedule to run every day at 2:00 AM
-    this.cronJob = cron.schedule('0 2 * * *', async () => {
+    // Schedule to run every day at midnight (00:00)
+    this.cronJob = cron.schedule('0 0 * * *', async () => {
       console.log('[AUTO-RENEWAL SCHEDULER] Starting daily auto-renewal process...');
       
       try {
@@ -40,15 +40,19 @@ class AutoRenewalScheduler {
         console.error('[AUTO-RENEWAL SCHEDULER] Error during daily process:', error);
       }
     }, {
-      scheduled: false, // Don't start immediately
-      timezone: "Europe/Tbilisi" // Adjust to your timezone
+      scheduled: false // Don't start immediately
+      // Removed timezone to use system default
     });
 
     // Start the cron job
     this.cronJob.start();
     this.isRunning = true;
 
-    console.log('[AUTO-RENEWAL SCHEDULER] Started - will run daily at 2:00 AM');
+    // Log current system time
+    const now = new Date();
+    console.log('[AUTO-RENEWAL SCHEDULER] Current system time:', now.toLocaleString());
+    console.log('[AUTO-RENEWAL SCHEDULER] Current system timezone offset:', now.getTimezoneOffset(), 'minutes from UTC');
+    console.log('[AUTO-RENEWAL SCHEDULER] Started - will run daily at midnight (00:00)');
     
     // Also run a startup check
     this.runStartupCheck();
@@ -98,6 +102,12 @@ class AutoRenewalScheduler {
     try {
       console.log('[AUTO-RENEWAL SCHEDULER] Running startup check...');
       
+      // Log next scheduled run time
+      if (this.cronJob) {
+        const nextRun = this.cronJob.nextDates(1);
+        console.log('[AUTO-RENEWAL SCHEDULER] Next scheduled run:', nextRun.toString());
+      }
+      
       const stats = await autoRenewalService.getAutoRenewalStats();
       
       if (stats.success) {
@@ -129,8 +139,8 @@ class AutoRenewalScheduler {
       const now = new Date();
       const currentHour = now.getHours();
       
-      // If it's after 2 AM and before 4 AM, and we haven't run today, we should run
-      if (currentHour >= 2 && currentHour < 4) {
+      // If it's after midnight and before 2 AM, and we haven't run today, we should run
+      if (currentHour >= 0 && currentHour < 2) {
         return { shouldRun: true, reason: 'Within scheduled window' };
       }
       
@@ -149,8 +159,8 @@ class AutoRenewalScheduler {
     return {
       isRunning: this.isRunning,
       nextRun: this.cronJob ? this.cronJob.nextDates(1).toString() : null,
-      timezone: 'Europe/Tbilisi',
-      schedule: '0 2 * * * (Daily at 2:00 AM)'
+      timezone: 'System Default',
+      schedule: '0 0 * * * (Daily at midnight 00:00)'
     };
   }
 

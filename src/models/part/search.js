@@ -11,18 +11,12 @@ class PartSearch {
       let query = `
         SELECT 
           p.*,
-          CASE 
-            WHEN p.id % 4 = 0 THEN 'super_vip'
-            WHEN p.id % 3 = 0 THEN 'vip_plus' 
-            WHEN p.id % 2 = 0 THEN 'vip'
-            ELSE 'none'
-          END as vip_status,
-          CASE 
-            WHEN p.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
-            WHEN p.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
-            WHEN p.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
-            ELSE NULL
-          END as vip_expiration_date,
+          p.vip_status,
+          p.vip_expiration_date,
+          p.auto_renewal_enabled,
+          p.auto_renewal_expiration_date,
+          p.auto_renewal_days,
+          p.auto_renewal_remaining_days,
           b.name as brand,
           pc.name as category,
           cm.name as model,

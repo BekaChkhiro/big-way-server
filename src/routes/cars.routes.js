@@ -781,12 +781,12 @@ router.get('/user', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     console.log('Fetching cars for user ID:', userId);
     
-    // Check if VIP and color highlighting columns exist
+    // Check if VIP, color highlighting, and auto-renewal columns exist
     const checkColumnsQuery = `
       SELECT column_name 
       FROM information_schema.columns 
       WHERE table_name = 'cars' 
-      AND column_name IN ('vip_status', 'vip_expiration_date', 'color_highlighting_enabled', 'color_highlighting_expiration_date')
+      AND column_name IN ('vip_status', 'vip_expiration_date', 'color_highlighting_enabled', 'color_highlighting_expiration_date', 'auto_renewal_enabled', 'auto_renewal_expiration_date', 'auto_renewal_days', 'auto_renewal_remaining_days')
     `;
     
     const columnCheck = await pool.query(checkColumnsQuery);
@@ -794,6 +794,8 @@ router.get('/user', authMiddleware, async (req, res) => {
                           columnCheck.rows.some(row => row.column_name === 'vip_expiration_date');
     const hasColorHighlightingColumns = columnCheck.rows.some(row => row.column_name === 'color_highlighting_enabled') && 
                                         columnCheck.rows.some(row => row.column_name === 'color_highlighting_expiration_date');
+    const hasAutoRenewalColumns = columnCheck.rows.some(row => row.column_name === 'auto_renewal_enabled') && 
+                                  columnCheck.rows.some(row => row.column_name === 'auto_renewal_expiration_date');
     
     // Query to get all cars belonging to the authenticated user
     const query = hasVipColumns ? `
@@ -823,7 +825,23 @@ router.get('/user', authMiddleware, async (req, res) => {
         END as is_color_highlighting_active` : `
         false as color_highlighting_enabled,
         NULL as color_highlighting_expiration_date,
-        false as is_color_highlighting_active`}
+        false as is_color_highlighting_active`},
+        ${hasAutoRenewalColumns ? `
+        COALESCE(c.auto_renewal_enabled, false) as auto_renewal_enabled,
+        c.auto_renewal_expiration_date AT TIME ZONE 'UTC' as auto_renewal_expiration_date,
+        c.auto_renewal_days,
+        c.auto_renewal_remaining_days,
+        CASE 
+          WHEN c.auto_renewal_enabled = true 
+               AND c.auto_renewal_expiration_date > NOW() 
+          THEN true 
+          ELSE false 
+        END as is_auto_renewal_active` : `
+        false as auto_renewal_enabled,
+        NULL as auto_renewal_expiration_date,
+        NULL as auto_renewal_days,
+        NULL as auto_renewal_remaining_days,
+        false as is_auto_renewal_active`}
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -844,7 +862,12 @@ router.get('/user', authMiddleware, async (req, res) => {
         false as is_vip_active,
         false as color_highlighting_enabled,
         NULL as color_highlighting_expiration_date,
-        false as is_color_highlighting_active
+        false as is_color_highlighting_active,
+        false as auto_renewal_enabled,
+        NULL as auto_renewal_expiration_date,
+        NULL as auto_renewal_days,
+        NULL as auto_renewal_remaining_days,
+        false as is_auto_renewal_active
       FROM cars c
       LEFT JOIN brands b ON c.brand_id = b.id
       LEFT JOIN categories cat ON c.category_id = cat.id
@@ -857,6 +880,7 @@ router.get('/user', authMiddleware, async (req, res) => {
     const result = await pool.query(query, [userId]);
     
     console.log(`VIP columns exist: ${hasVipColumns}`);
+    console.log(`Auto-renewal columns exist: ${hasAutoRenewalColumns}`);
     if (result.rows.length > 0) {
       console.log('Sample car VIP data:', {
         vip_status: result.rows[0].vip_status,
@@ -865,6 +889,13 @@ router.get('/user', authMiddleware, async (req, res) => {
         is_color_highlighting_active: Boolean(result.rows[0].is_color_highlighting_active),
         color_highlighting_expiration_date: result.rows[0].color_highlighting_expiration_date,
         is_vip_active: result.rows[0].is_vip_active
+      });
+      console.log('Sample car auto-renewal data:', {
+        auto_renewal_enabled: Boolean(result.rows[0].auto_renewal_enabled),
+        auto_renewal_expiration_date: result.rows[0].auto_renewal_expiration_date,
+        auto_renewal_days: result.rows[0].auto_renewal_days,
+        auto_renewal_remaining_days: result.rows[0].auto_renewal_remaining_days,
+        is_auto_renewal_active: Boolean(result.rows[0].is_auto_renewal_active)
       });
     }
     
@@ -901,6 +932,12 @@ router.get('/user', authMiddleware, async (req, res) => {
         color_highlighting_enabled: car.color_highlighting_enabled || false,
         color_highlighting_expiration_date: car.color_highlighting_expiration_date,
         is_color_highlighting_active: car.is_color_highlighting_active || false,
+        // Auto renewal fields
+        auto_renewal_enabled: car.auto_renewal_enabled || false,
+        auto_renewal_expiration_date: car.auto_renewal_expiration_date,
+        auto_renewal_days: car.auto_renewal_days,
+        auto_renewal_remaining_days: car.auto_renewal_remaining_days,
+        is_auto_renewal_active: car.is_auto_renewal_active || false,
         // Create a properly nested specifications object
         specifications: {
           engine_type: car.engine_type,

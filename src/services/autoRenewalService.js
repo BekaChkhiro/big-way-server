@@ -13,7 +13,45 @@ class AutoRenewalService {
     try {
       console.log('Starting car auto-renewal processing...');
       
-      // Get all cars eligible for auto-renewal
+      // Debug: First check all cars with auto-renewal enabled
+      const debugQuery = `
+        SELECT 
+          id, 
+          title,
+          auto_renewal_enabled,
+          auto_renewal_expiration_date,
+          auto_renewal_last_processed,
+          auto_renewal_days,
+          NOW() as current_time,
+          CASE 
+            WHEN auto_renewal_expiration_date IS NULL THEN 'No expiration date'
+            WHEN auto_renewal_expiration_date <= NOW() THEN 'Expired'
+            WHEN auto_renewal_last_processed IS NULL THEN 'Never processed - ELIGIBLE'
+            WHEN auto_renewal_last_processed + INTERVAL '1 day' * auto_renewal_days <= NOW() THEN 'Time elapsed - ELIGIBLE'
+            ELSE 'Not yet time'
+          END as eligibility_status
+        FROM cars 
+        WHERE auto_renewal_enabled = TRUE
+        ORDER BY id
+      `;
+      
+      const debugResult = await pool.query(debugQuery);
+      console.log('=== AUTO-RENEWAL DEBUG INFO ===');
+      console.log(`Total cars with auto_renewal_enabled = TRUE: ${debugResult.rows.length}`);
+      
+      if (debugResult.rows.length > 0) {
+        console.log('Auto-renewal enabled cars:');
+        debugResult.rows.forEach(car => {
+          console.log(`- Car #${car.id}: ${car.title}`);
+          console.log(`  Expiration: ${car.auto_renewal_expiration_date}`);
+          console.log(`  Last processed: ${car.auto_renewal_last_processed || 'Never'}`);
+          console.log(`  Renewal days: ${car.auto_renewal_days}`);
+          console.log(`  Status: ${car.eligibility_status}`);
+          console.log('');
+        });
+      }
+      
+      // Get all cars eligible for auto-renewal (relaxed criteria for testing)
       const query = `
         SELECT 
           id, 
@@ -26,7 +64,7 @@ class AutoRenewalService {
           auto_renewal_remaining_days
         FROM cars 
         WHERE auto_renewal_enabled = TRUE 
-          AND auto_renewal_expiration_date > NOW()
+          AND (auto_renewal_expiration_date IS NULL OR auto_renewal_expiration_date > NOW())
           AND (
             auto_renewal_last_processed IS NULL 
             OR auto_renewal_last_processed + INTERVAL '1 day' * auto_renewal_days <= NOW()
@@ -48,24 +86,44 @@ class AutoRenewalService {
       
       for (const car of carsToRenew) {
         try {
+          console.log(`Processing car #${car.id}: ${car.title}`);
+          console.log(`Current created_at: ${car.created_at}`);
+          console.log(`Last processed: ${car.auto_renewal_last_processed || 'Never'}`);
+          
           await pool.query('BEGIN');
           
-          // Update the car's created_at date to current timestamp
+          // First, let's check if the function exists
+          const functionCheck = await pool.query(`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_proc 
+              WHERE proname = 'calculate_auto_renewal_remaining_days'
+            );
+          `);
+          console.log('Function exists:', functionCheck.rows[0].exists);
+          
+          // Update the car's created_at date to current timestamp (without function first)
           const updateQuery = `
             UPDATE cars 
             SET 
               created_at = NOW(),
-              auto_renewal_last_processed = NOW(),
-              auto_renewal_remaining_days = calculate_auto_renewal_remaining_days(
-                auto_renewal_expiration_date,
-                NOW()
-              )
+              auto_renewal_last_processed = NOW()
             WHERE id = $1
-            RETURNING created_at, auto_renewal_remaining_days
+            RETURNING created_at, auto_renewal_last_processed, auto_renewal_remaining_days
           `;
           
+          console.log(`Executing update query for car #${car.id}`);
           const updateResult = await pool.query(updateQuery, [car.id]);
+          console.log('Update result rows:', updateResult.rowCount);
+          
+          if (updateResult.rows.length === 0) {
+            throw new Error(`No rows updated for car #${car.id}`);
+          }
+          
           const updatedCar = updateResult.rows[0];
+          console.log(`Updated car #${car.id}:`);
+          console.log(`  New created_at: ${updatedCar.created_at}`);
+          console.log(`  Last processed: ${updatedCar.auto_renewal_last_processed}`);
+          console.log(`  Remaining days: ${updatedCar.auto_renewal_remaining_days}`);
           
           // Record the auto-renewal transaction for tracking
           const transactionQuery = `
@@ -90,12 +148,23 @@ class AutoRenewalService {
           ]);
           
           await pool.query('COMMIT');
+          console.log('Transaction committed for car #' + car.id);
+          
+          // Verify the update by querying the database again
+          const verifyQuery = `SELECT id, created_at, auto_renewal_last_processed FROM cars WHERE id = $1`;
+          const verifyResult = await pool.query(verifyQuery, [car.id]);
+          const verifiedCar = verifyResult.rows[0];
+          console.log(`Verification query for car #${car.id}:`);
+          console.log(`  DB created_at: ${verifiedCar.created_at}`);
+          console.log(`  DB last_processed: ${verifiedCar.auto_renewal_last_processed}`);
           
           renewedCount++;
           renewalResults.push({
             carId: car.id,
             title: car.title,
+            oldCreatedAt: car.created_at,
             newCreatedAt: updatedCar.created_at,
+            verifiedCreatedAt: verifiedCar.created_at,
             remainingDays: updatedCar.auto_renewal_remaining_days
           });
           
@@ -138,7 +207,45 @@ class AutoRenewalService {
     try {
       console.log('Starting part auto-renewal processing...');
       
-      // Get all parts eligible for auto-renewal
+      // Debug: First check all parts with auto-renewal enabled
+      const debugQuery = `
+        SELECT 
+          id, 
+          title,
+          auto_renewal_enabled,
+          auto_renewal_expiration_date,
+          auto_renewal_last_processed,
+          auto_renewal_days,
+          NOW() as current_time,
+          CASE 
+            WHEN auto_renewal_expiration_date IS NULL THEN 'No expiration date'
+            WHEN auto_renewal_expiration_date <= NOW() THEN 'Expired'
+            WHEN auto_renewal_last_processed IS NULL THEN 'Never processed - ELIGIBLE'
+            WHEN auto_renewal_last_processed + INTERVAL '1 day' * auto_renewal_days <= NOW() THEN 'Time elapsed - ELIGIBLE'
+            ELSE 'Not yet time'
+          END as eligibility_status
+        FROM parts 
+        WHERE auto_renewal_enabled = TRUE
+        ORDER BY id
+      `;
+      
+      const debugResult = await pool.query(debugQuery);
+      console.log('=== PARTS AUTO-RENEWAL DEBUG INFO ===');
+      console.log(`Total parts with auto_renewal_enabled = TRUE: ${debugResult.rows.length}`);
+      
+      if (debugResult.rows.length > 0) {
+        console.log('Auto-renewal enabled parts:');
+        debugResult.rows.forEach(part => {
+          console.log(`- Part #${part.id}: ${part.title}`);
+          console.log(`  Expiration: ${part.auto_renewal_expiration_date}`);
+          console.log(`  Last processed: ${part.auto_renewal_last_processed || 'Never'}`);
+          console.log(`  Renewal days: ${part.auto_renewal_days}`);
+          console.log(`  Status: ${part.eligibility_status}`);
+          console.log('');
+        });
+      }
+      
+      // Get all parts eligible for auto-renewal (relaxed criteria for testing)
       const query = `
         SELECT 
           id, 
@@ -151,7 +258,7 @@ class AutoRenewalService {
           auto_renewal_remaining_days
         FROM parts 
         WHERE auto_renewal_enabled = TRUE 
-          AND auto_renewal_expiration_date > NOW()
+          AND (auto_renewal_expiration_date IS NULL OR auto_renewal_expiration_date > NOW())
           AND (
             auto_renewal_last_processed IS NULL 
             OR auto_renewal_last_processed + INTERVAL '1 day' * auto_renewal_days <= NOW()
@@ -173,24 +280,35 @@ class AutoRenewalService {
       
       for (const part of partsToRenew) {
         try {
+          console.log(`Processing part #${part.id}: ${part.title}`);
+          console.log(`Current created_at: ${part.created_at}`);
+          console.log(`Last processed: ${part.auto_renewal_last_processed || 'Never'}`);
+          
           await pool.query('BEGIN');
           
-          // Update the part's created_at date to current timestamp
+          // Update the part's created_at date to current timestamp (without function first)
           const updateQuery = `
             UPDATE parts 
             SET 
               created_at = NOW(),
-              auto_renewal_last_processed = NOW(),
-              auto_renewal_remaining_days = calculate_auto_renewal_remaining_days(
-                auto_renewal_expiration_date,
-                NOW()
-              )
+              auto_renewal_last_processed = NOW()
             WHERE id = $1
-            RETURNING created_at, auto_renewal_remaining_days
+            RETURNING created_at, auto_renewal_last_processed, auto_renewal_remaining_days
           `;
           
+          console.log(`Executing update query for part #${part.id}`);
           const updateResult = await pool.query(updateQuery, [part.id]);
+          console.log('Update result rows:', updateResult.rowCount);
+          
+          if (updateResult.rows.length === 0) {
+            throw new Error(`No rows updated for part #${part.id}`);
+          }
+          
           const updatedPart = updateResult.rows[0];
+          console.log(`Updated part #${part.id}:`);
+          console.log(`  New created_at: ${updatedPart.created_at}`);
+          console.log(`  Last processed: ${updatedPart.auto_renewal_last_processed}`);
+          console.log(`  Remaining days: ${updatedPart.auto_renewal_remaining_days}`);
           
           // Record the auto-renewal transaction for tracking
           const transactionQuery = `
@@ -215,12 +333,23 @@ class AutoRenewalService {
           ]);
           
           await pool.query('COMMIT');
+          console.log('Transaction committed for part #' + part.id);
+          
+          // Verify the update by querying the database again
+          const verifyQuery = `SELECT id, created_at, auto_renewal_last_processed FROM parts WHERE id = $1`;
+          const verifyResult = await pool.query(verifyQuery, [part.id]);
+          const verifiedPart = verifyResult.rows[0];
+          console.log(`Verification query for part #${part.id}:`);
+          console.log(`  DB created_at: ${verifiedPart.created_at}`);
+          console.log(`  DB last_processed: ${verifiedPart.auto_renewal_last_processed}`);
           
           renewedCount++;
           renewalResults.push({
             partId: part.id,
             title: part.title,
+            oldCreatedAt: part.created_at,
             newCreatedAt: updatedPart.created_at,
+            verifiedCreatedAt: verifiedPart.created_at,
             remainingDays: updatedPart.auto_renewal_remaining_days
           });
           

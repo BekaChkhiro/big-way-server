@@ -33,6 +33,7 @@ const autoRenewalRoutes = require('./routes/autoRenewal.routes');
 const specs = require('./docs/swagger');
 const { pg: pool } = require('../config/db.config');
 const VipPricing = require('./models/VipPricing');
+const autoRenewalScheduler = require('./schedulers/autoRenewalScheduler');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -144,6 +145,10 @@ if (require.main === module) {
   // The database connection is already tested in db.config.js
   app.listen(PORT, () => {
     logger.info(`Server is running on port ${PORT}`);
+    
+    // Start the auto-renewal scheduler
+    autoRenewalScheduler.start();
+    logger.info('Auto-renewal scheduler started');
   }).on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
       logger.error(`Port ${PORT} is already in use. Please free up the port and try again.`);
