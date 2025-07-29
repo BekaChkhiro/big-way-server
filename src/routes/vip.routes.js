@@ -15,6 +15,9 @@ router.put('/update/:carId', authMiddleware, vipController.updateVipStatus);
 // Purchase VIP status for a car (requires authentication)
 router.post('/purchase/:carId', authMiddleware, vipController.purchaseVipStatus);
 
+// Purchase comprehensive VIP package with additional services (requires authentication)
+router.post('/purchase-package/:carId', authMiddleware, vipController.purchaseVipPackage);
+
 // Get VIP pricing information
 router.get('/pricing', vipController.getVipPricing);
 

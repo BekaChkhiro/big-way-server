@@ -21,4 +21,7 @@ router.delete('/:id', authMiddleware, PartsController.delete.bind(PartsControlle
 router.put('/:partId/images/:imageId/primary', authMiddleware, PartsController.setImageAsPrimary.bind(PartsController));
 router.delete('/:partId/images/:imageId', authMiddleware, PartsController.deleteImage.bind(PartsController));
 
+// VIP purchase route
+router.post('/vip/purchase', authMiddleware, PartsController.purchaseVipStatus.bind(PartsController));
+
 module.exports = router;

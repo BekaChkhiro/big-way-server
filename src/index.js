@@ -29,9 +29,11 @@ const vipPricingRoutes = require('./routes/vipPricingRoutes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const dealersRoutes = require('./routes/dealers.routes');
 const autosalonsRoutes = require('./routes/autosalons.routes');
+const autoRenewalRoutes = require('./routes/autoRenewal.routes');
 const specs = require('./docs/swagger');
 const { pg: pool } = require('../config/db.config');
 const VipPricing = require('./models/VipPricing');
+const autoRenewalScheduler = require('./schedulers/autoRenewalScheduler');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -110,6 +112,7 @@ app.use('/api', vipPricingRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dealers', dealersRoutes);
 app.use('/api/autosalons', autosalonsRoutes);
+app.use('/api/auto-renewal', autoRenewalRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Big Way API' });
@@ -142,6 +145,10 @@ if (require.main === module) {
   // The database connection is already tested in db.config.js
   app.listen(PORT, () => {
     logger.info(`Server is running on port ${PORT}`);
+    
+    // Start the auto-renewal scheduler
+    autoRenewalScheduler.start();
+    logger.info('Auto-renewal scheduler started');
   }).on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
       logger.error(`Port ${PORT} is already in use. Please free up the port and try again.`);

@@ -74,6 +74,13 @@ class CarSearch {
     const query = `
       SELECT 
         c.*,
+        c.vip_status,
+        c.vip_expiration_date,
+        c.vip_active,
+        c.auto_renewal_enabled,
+        c.auto_renewal_expiration_date,
+        c.auto_renewal_days,
+        c.auto_renewal_remaining_days,
         (
           SELECT row_to_json(spec)
           FROM (
@@ -304,6 +311,13 @@ class CarSearch {
     const query = `
       SELECT 
         c.*,
+        c.vip_status,
+        c.vip_expiration_date,
+        c.vip_active,
+        c.auto_renewal_enabled,
+        c.auto_renewal_expiration_date,
+        c.auto_renewal_days,
+        c.auto_renewal_remaining_days,
         (
           SELECT row_to_json(spec)
           FROM (
@@ -432,6 +446,13 @@ class CarSearch {
     const query = `
       SELECT 
         c.*,
+        c.vip_status,
+        c.vip_expiration_date,
+        c.vip_active,
+        c.auto_renewal_enabled,
+        c.auto_renewal_expiration_date,
+        c.auto_renewal_days,
+        c.auto_renewal_remaining_days,
         (
           SELECT row_to_json(spec)
           FROM (

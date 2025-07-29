@@ -11,6 +11,12 @@ class PartSearch {
       let query = `
         SELECT 
           p.*,
+          p.vip_status,
+          p.vip_expiration_date,
+          p.auto_renewal_enabled,
+          p.auto_renewal_expiration_date,
+          p.auto_renewal_days,
+          p.auto_renewal_remaining_days,
           b.name as brand,
           pc.name as category,
           cm.name as model,

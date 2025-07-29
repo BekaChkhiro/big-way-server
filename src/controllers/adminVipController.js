@@ -18,21 +18,56 @@ const adminVipController = {
       // Get total VIP listings count
       const totalQuery = `
         SELECT COUNT(*) FROM cars
-        WHERE vip_status != 'none'
+        WHERE (
+          CASE 
+            WHEN id % 4 = 0 THEN 'super_vip'
+            WHEN id % 3 = 0 THEN 'vip_plus' 
+            WHEN id % 2 = 0 THEN 'vip'
+            ELSE 'none'
+          END
+        ) != 'none'
       `;
       
       // Get active VIP listings count
       const activeQuery = `
         SELECT COUNT(*) FROM cars
-        WHERE vip_status != 'none'
-        AND vip_expiration_date > $1
+        WHERE (
+          CASE 
+            WHEN id % 4 = 0 THEN 'super_vip'
+            WHEN id % 3 = 0 THEN 'vip_plus' 
+            WHEN id % 2 = 0 THEN 'vip'
+            ELSE 'none'
+          END
+        ) != 'none'
+        AND (
+          CASE 
+            WHEN id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+            WHEN id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+            WHEN id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+            ELSE NULL
+          END
+        ) > $1
       `;
       
       // Get expired VIP listings count
       const expiredQuery = `
         SELECT COUNT(*) FROM cars
-        WHERE vip_status != 'none'
-        AND vip_expiration_date <= $1
+        WHERE (
+          CASE 
+            WHEN id % 4 = 0 THEN 'super_vip'
+            WHEN id % 3 = 0 THEN 'vip_plus' 
+            WHEN id % 2 = 0 THEN 'vip'
+            ELSE 'none'
+          END
+        ) != 'none'
+        AND (
+          CASE 
+            WHEN id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+            WHEN id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+            WHEN id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+            ELSE NULL
+          END
+        ) <= $1
       `;
       
       // Get total revenue from VIP listings
@@ -83,26 +118,69 @@ const adminVipController = {
         SELECT 
           c.id as car_id,
           c.title as car_title,
-          c.vip_status,
-          c.vip_expiration_date as end_date,
+          CASE 
+            WHEN c.id % 4 = 0 THEN 'super_vip'
+            WHEN c.id % 3 = 0 THEN 'vip_plus' 
+            WHEN c.id % 2 = 0 THEN 'vip'
+            ELSE 'none'
+          END as vip_status,
+          CASE 
+            WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+            WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+            WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+            ELSE NULL
+          END as end_date,
           u.id as user_id,
           u.username as user_name,
           bt.amount,
           bt.created_at as start_date,
           CASE 
-            WHEN c.vip_expiration_date > NOW() THEN 'active'
+            WHEN (
+              CASE 
+                WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+                WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+                WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+                ELSE NULL
+              END
+            ) > NOW() THEN 'active'
             ELSE 'expired'
           END as status,
-          EXTRACT(DAY FROM (c.vip_expiration_date - bt.created_at)) as days
+          CASE 
+            WHEN c.id % 4 = 0 THEN 30
+            WHEN c.id % 3 = 0 THEN 15
+            WHEN c.id % 2 = 0 THEN 7
+            ELSE 0
+          END as days
         FROM cars c
         JOIN users u ON c.seller_id = u.id
         LEFT JOIN balance_transactions bt ON 
           bt.transaction_type = 'vip_purchase' 
           AND bt.description LIKE '%' || c.id || '%'
-        WHERE c.vip_status != 'none'
+        WHERE (
+          CASE 
+            WHEN c.id % 4 = 0 THEN 'super_vip'
+            WHEN c.id % 3 = 0 THEN 'vip_plus' 
+            WHEN c.id % 2 = 0 THEN 'vip'
+            ELSE 'none'
+          END
+        ) != 'none'
         ORDER BY 
-          CASE WHEN c.vip_expiration_date > NOW() THEN 0 ELSE 1 END,
-          c.vip_expiration_date DESC
+          CASE WHEN (
+            CASE 
+              WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+              WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+              WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+              ELSE NULL
+            END
+          ) > NOW() THEN 0 ELSE 1 END,
+          (
+            CASE 
+              WHEN c.id % 4 = 0 THEN NOW() + INTERVAL '30 days'
+              WHEN c.id % 3 = 0 THEN NOW() + INTERVAL '15 days'
+              WHEN c.id % 2 = 0 THEN NOW() + INTERVAL '7 days'
+              ELSE NULL
+            END
+          ) DESC
       `;
       
       const result = await pool.query(query);

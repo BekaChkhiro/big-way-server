@@ -22,7 +22,9 @@ class WishlistModel {
             b.name as brand,
             cat.name as category,
             s.id as spec_id,
-            l.id as loc_id
+            l.id as loc_id,
+            c.vip_status as car_vip_status,
+            c.vip_expiration_date as car_vip_expiration_date
           FROM wishlists w
           LEFT JOIN cars c ON w.car_id = c.id
           LEFT JOIN brands b ON c.brand_id = b.id
@@ -50,6 +52,8 @@ class WishlistModel {
           wi.updated_at,
           wi.added_to_wishlist_at,
           wi.brand,
+          wi.car_vip_status as vip_status,
+          wi.car_vip_expiration_date as vip_expiration_date,
           wi.category,
           jsonb_build_object(
             'id', s.id,
@@ -114,6 +118,8 @@ class WishlistModel {
         updated_at: row.updated_at,
         brand: row.brand,
         category: row.category,
+        vip_status: row.vip_status,
+        vip_expiration_date: row.vip_expiration_date,
         specifications: row.specifications,
         location: row.location,
         images: row.images || [],
