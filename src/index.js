@@ -34,6 +34,8 @@ const specs = require('./docs/swagger');
 const { pg: pool } = require('../config/db.config');
 const VipPricing = require('./models/VipPricing');
 const autoRenewalScheduler = require('./schedulers/autoRenewalScheduler');
+const vipExpirationScheduler = require('./schedulers/vipExpirationScheduler');
+const { startColorHighlightingScheduler } = require('./scripts/color-highlighting-scheduler');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -149,6 +151,14 @@ if (require.main === module) {
     // Start the auto-renewal scheduler
     autoRenewalScheduler.start();
     logger.info('Auto-renewal scheduler started');
+    
+    // Start the VIP expiration scheduler
+    vipExpirationScheduler.start();
+    logger.info('VIP expiration scheduler started');
+    
+    // Start the color highlighting scheduler
+    startColorHighlightingScheduler();
+    logger.info('Color highlighting scheduler started');
   }).on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
       logger.error(`Port ${PORT} is already in use. Please free up the port and try again.`);

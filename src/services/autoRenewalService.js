@@ -25,10 +25,10 @@ class AutoRenewalService {
           NOW() as current_time,
           CASE 
             WHEN auto_renewal_expiration_date IS NULL THEN 'No expiration date'
-            WHEN auto_renewal_expiration_date <= NOW() THEN 'Expired'
+            WHEN auto_renewal_expiration_date <= NOW() THEN 'EXPIRED - auto-renewal disabled'
             WHEN auto_renewal_last_processed IS NULL THEN 'Never processed - ELIGIBLE'
-            WHEN auto_renewal_last_processed + INTERVAL '1 day' * auto_renewal_days <= NOW() THEN 'Time elapsed - ELIGIBLE'
-            ELSE 'Not yet time'
+            WHEN auto_renewal_last_processed::date < CURRENT_DATE THEN 'Not processed today - ELIGIBLE'
+            ELSE 'Already processed today'
           END as eligibility_status
         FROM cars 
         WHERE auto_renewal_enabled = TRUE
@@ -51,7 +51,8 @@ class AutoRenewalService {
         });
       }
       
-      // Get all cars eligible for auto-renewal (relaxed criteria for testing)
+      // Get all cars eligible for auto-renewal
+      // Update created_at daily (every 24 hours) for active auto-renewals
       const query = `
         SELECT 
           id, 
@@ -67,7 +68,7 @@ class AutoRenewalService {
           AND (auto_renewal_expiration_date IS NULL OR auto_renewal_expiration_date > NOW())
           AND (
             auto_renewal_last_processed IS NULL 
-            OR auto_renewal_last_processed + INTERVAL '1 day' * auto_renewal_days <= NOW()
+            OR auto_renewal_last_processed::date < CURRENT_DATE
           )
         ORDER BY auto_renewal_last_processed ASC NULLS FIRST
       `;
@@ -219,10 +220,10 @@ class AutoRenewalService {
           NOW() as current_time,
           CASE 
             WHEN auto_renewal_expiration_date IS NULL THEN 'No expiration date'
-            WHEN auto_renewal_expiration_date <= NOW() THEN 'Expired'
+            WHEN auto_renewal_expiration_date <= NOW() THEN 'EXPIRED - auto-renewal disabled'
             WHEN auto_renewal_last_processed IS NULL THEN 'Never processed - ELIGIBLE'
-            WHEN auto_renewal_last_processed + INTERVAL '1 day' * auto_renewal_days <= NOW() THEN 'Time elapsed - ELIGIBLE'
-            ELSE 'Not yet time'
+            WHEN auto_renewal_last_processed::date < CURRENT_DATE THEN 'Not processed today - ELIGIBLE'
+            ELSE 'Already processed today'
           END as eligibility_status
         FROM parts 
         WHERE auto_renewal_enabled = TRUE
@@ -245,7 +246,8 @@ class AutoRenewalService {
         });
       }
       
-      // Get all parts eligible for auto-renewal (relaxed criteria for testing)
+      // Get all parts eligible for auto-renewal
+      // Update created_at daily (every 24 hours) for active auto-renewals
       const query = `
         SELECT 
           id, 
@@ -261,7 +263,7 @@ class AutoRenewalService {
           AND (auto_renewal_expiration_date IS NULL OR auto_renewal_expiration_date > NOW())
           AND (
             auto_renewal_last_processed IS NULL 
-            OR auto_renewal_last_processed + INTERVAL '1 day' * auto_renewal_days <= NOW()
+            OR auto_renewal_last_processed::date < CURRENT_DATE
           )
         ORDER BY auto_renewal_last_processed ASC NULLS FIRST
       `;

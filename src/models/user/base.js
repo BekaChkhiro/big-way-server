@@ -92,23 +92,49 @@ class UserModel {
 
   static async findAll() {
     try {
-      // First try with a query that includes all possible fields except gender
+      // Query that includes all user fields plus car count
       const query = `
-        SELECT id, username, email, first_name, last_name, age, phone, role, created_at
-        FROM users
-        ORDER BY created_at DESC
+        SELECT 
+          u.id, 
+          u.username, 
+          u.email, 
+          u.first_name, 
+          u.last_name, 
+          u.age, 
+          u.phone, 
+          u.role, 
+          u.created_at,
+          COALESCE(c.car_count, 0) as car_count
+        FROM users u
+        LEFT JOIN (
+          SELECT seller_id, COUNT(*) as car_count
+          FROM cars
+          GROUP BY seller_id
+        ) c ON u.id = c.seller_id
+        ORDER BY u.created_at DESC
       `;
       const result = await pool.query(query);
       return result.rows;
     } catch (error) {
-      console.error('Error in findAll with full fields:', error);
+      console.error('Error in findAll with car count:', error);
       
       // If that fails, try with minimal fields that should exist in all environments
       try {
         const minimalQuery = `
-          SELECT id, username, email, role, created_at
-          FROM users
-          ORDER BY created_at DESC
+          SELECT 
+            u.id, 
+            u.username, 
+            u.email, 
+            u.role, 
+            u.created_at,
+            COALESCE(c.car_count, 0) as car_count
+          FROM users u
+          LEFT JOIN (
+            SELECT seller_id, COUNT(*) as car_count
+            FROM cars
+            GROUP BY seller_id
+          ) c ON u.id = c.seller_id
+          ORDER BY u.created_at DESC
         `;
         const result = await pool.query(minimalQuery);
         return result.rows;

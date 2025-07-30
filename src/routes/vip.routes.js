@@ -27,4 +27,8 @@ router.get('/status/:carId', vipController.getVipStatus);
 // Activate/deactivate VIP status
 router.post('/toggle/:carId', authMiddleware, vipController.toggleVipStatus);
 
+// VIP Auto-renewal endpoints
+router.post('/auto-renewal/:carId/toggle', authMiddleware, vipController.toggleVipAutoRenewal);
+router.get('/auto-renewal/:carId/status', authMiddleware, vipController.getVipAutoRenewalStatus);
+
 module.exports = router;

@@ -12,11 +12,6 @@ const { upload, processAndUpload, setCacheHeaders } = require('../middlewares/up
 // Use the upload middleware configured for AWS S3
 const carUpload = upload;
 
-// Test endpoint to verify VIP data
-router.get('/api-test/vip', async (req, res) => {
-  const testCar = { id: 4, vip_status: 'super_vip' };
-  res.json({ test: 'VIP data endpoint', car: testCar });
-});
 
 // Get all brands
 router.get('/brands', async (req, res) => {
@@ -624,6 +619,7 @@ router.get('/', async (req, res) => {
     console.log('WHERE clause:', whereClause);
     console.log('Query params:', queryParams);
     
+    
     // Validate sortBy to prevent SQL injection
     const validSortColumns = [
       'c.created_at', 'c.price', 'c.year', 'spec.mileage'
@@ -680,7 +676,14 @@ router.get('/', async (req, res) => {
       LEFT JOIN locations loc ON c.location_id = loc.id
       LEFT JOIN specifications spec ON c.specification_id = spec.id
       ${whereClause}
-      ORDER BY ${sortColumn} ${sortOrder}
+      ORDER BY 
+        CASE 
+          WHEN c.vip_status = 'super_vip' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 1
+          WHEN c.vip_status = 'vip_plus' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 2
+          WHEN c.vip_status = 'vip' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 3
+          ELSE 4
+        END,
+        ${sortColumn} ${sortOrder}
       LIMIT ${limit} OFFSET ${offset}
     `;
     
@@ -1143,6 +1146,8 @@ router.get('/:id', async (req, res) => {
         c.vip_status,
         c.vip_expiration_date,
         c.vip_active,
+        c.auto_renewal_enabled,
+        c.auto_renewal_days,
         -- Dealer profile data
         dp.id as dealer_profile_id,
         dp.company_name as dealer_company_name,
@@ -1252,6 +1257,15 @@ router.get('/:id', async (req, res) => {
       updated_at: car.updated_at,
       category_name: car.category, // დავამატეთ category_name ველი, რომელიც იყენებს car.category ღირებულებას
       vin_code: car.vin_code, // Add VIN code to the response
+      // VIP fields
+      vip_status: car.vip_status || 'none',
+      vip_expiration_date: car.vip_expiration_date,
+      vip_active: Boolean(car.vip_active),
+      auto_renewal_enabled: Boolean(car.auto_renewal_enabled),
+      auto_renewal_days: car.auto_renewal_days,
+      // Auto-renewal fields (using same fields for compatibility)
+      auto_renewal_enabled: Boolean(car.auto_renewal_enabled),
+      auto_renewal_days: car.auto_renewal_days,
       // Color highlighting fields
       color_highlighting_enabled: Boolean(car.color_highlighting_enabled),
       color_highlighting_expiration_date: car.color_highlighting_expiration_date,
