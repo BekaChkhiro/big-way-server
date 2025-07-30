@@ -1,7 +1,7 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const FacebookStrategy = require('passport-facebook').Strategy;
-const pool = require('./db.config');
+const { pg: pool } = require('./db.config');
 const UserModel = require('../src/models/user/base');
 const { generateToken, generateRefreshToken } = require('./jwt.config');
 
