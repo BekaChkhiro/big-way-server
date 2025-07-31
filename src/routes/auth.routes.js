@@ -424,6 +424,143 @@ router.get(
   }
 );
 
+// Facebook token authentication (for SDK login)
+router.post('/facebook', async (req, res) => {
+  try {
+    const { access_token } = req.body;
+    
+    if (!access_token) {
+      return res.status(400).json({ message: 'Access token is required' });
+    }
+
+    // Verify the token with Facebook Graph API
+    const response = await fetch(`https://graph.facebook.com/me?access_token=${access_token}&fields=id,email,first_name,last_name`);
+    
+    if (!response.ok) {
+      return res.status(401).json({ message: 'Invalid Facebook access token' });
+    }
+    
+    const facebookUser = await response.json();
+    
+    if (!facebookUser.id) {
+      return res.status(401).json({ message: 'Invalid Facebook user data' });
+    }
+
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Check if user already exists with Facebook ID
+      const result = await client.query(
+        'SELECT * FROM users WHERE facebook_id = $1',
+        [facebookUser.id]
+      );
+      
+      let user = result.rows[0];
+
+      // If user doesn't exist with Facebook ID, check if email exists
+      if (!user && facebookUser.email) {
+        const emailResult = await client.query(
+          'SELECT * FROM users WHERE email = $1',
+          [facebookUser.email]
+        );
+        
+        // If email exists, link Facebook ID to existing account
+        if (emailResult.rows.length > 0) {
+          user = emailResult.rows[0];
+          await client.query(
+            'UPDATE users SET facebook_id = $1 WHERE id = $2',
+            [facebookUser.id, user.id]
+          );
+        }
+      }
+      
+      // If no user exists at all, create a new one
+      if (!user) {
+        const email = facebookUser.email || null;
+        const firstName = facebookUser.first_name || '';
+        const lastName = facebookUser.last_name || '';
+        
+        // Generate a unique username based on name or email
+        let username = '';
+        if (firstName && lastName) {
+          username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
+        } else if (email) {
+          username = email.split('@')[0];
+        } else {
+          username = 'user' + Math.floor(Math.random() * 10000);
+        }
+        
+        // Check if username exists and make it unique if needed
+        const usernameCheckResult = await client.query(
+          'SELECT COUNT(*) FROM users WHERE username = $1',
+          [username]
+        );
+        
+        if (usernameCheckResult.rows[0].count > 0) {
+          username = username + Math.floor(Math.random() * 10000);
+        }
+        
+        // Generate a random password hash for OAuth users
+        const randomPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).toUpperCase().slice(-4);
+        
+        // Default values for required fields
+        const defaultAge = 18;
+        const defaultGender = 'male';
+        const defaultPhone = '+0000000000';
+        const profileCompleted = false;
+        
+        // Insert the new user
+        const insertResult = await client.query(
+          `INSERT INTO users 
+          (username, email, facebook_id, first_name, last_name, role, password, age, gender, phone, profile_completed)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at, facebook_id, profile_completed`,
+          [
+            username, 
+            email,
+            facebookUser.id,
+            firstName,
+            lastName,
+            'user',
+            randomPassword,
+            defaultAge,
+            defaultGender,
+            defaultPhone,
+            profileCompleted
+          ]
+        );
+        
+        user = insertResult.rows[0];
+      }
+      
+      await client.query('COMMIT');
+      
+      // Generate JWT tokens
+      const { generateToken, generateRefreshToken } = require('../../config/jwt.config');
+      const tokenPayload = { id: user.id, role: user.role };
+      const token = generateToken(tokenPayload);
+      const refreshToken = generateRefreshToken(tokenPayload);
+      
+      // Remove sensitive data
+      delete user.password;
+      delete user.reset_token;
+      delete user.reset_token_expires;
+      
+      res.json({ user, token, refreshToken });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Facebook token authentication error:', error);
+    res.status(500).json({ message: 'Facebook authentication failed' });
+  }
+});
+
 // Facebook OAuth callback
 router.get(
   '/facebook/callback',
