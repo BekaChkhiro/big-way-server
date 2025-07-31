@@ -149,7 +149,14 @@ class CarSearch {
       LEFT JOIN categories cat ON c.category_id = cat.id
       ${whereClause}
       GROUP BY c.id, c.author_name, c.author_phone, s.id, l.id, b.name, cat.name
-      ORDER BY c.${sortColumn} ${sortOrder}
+      ORDER BY 
+        CASE 
+          WHEN c.vip_status = 'super_vip' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 1
+          WHEN c.vip_status = 'vip_plus' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 2
+          WHEN c.vip_status = 'vip' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 3
+          ELSE 4
+        END,
+        c.${sortColumn} ${sortOrder}
       LIMIT $1 OFFSET $2
     `;
 
@@ -397,6 +404,12 @@ class CarSearch {
       WHERE ${conditions.join(' AND ')}
       GROUP BY c.id, c.author_name, c.author_phone, s.id, l.id, b.name, cat.name
       ORDER BY 
+        CASE 
+          WHEN c.vip_status = 'super_vip' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 1
+          WHEN c.vip_status = 'vip_plus' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 2
+          WHEN c.vip_status = 'vip' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 3
+          ELSE 4
+        END,
         CASE WHEN $${paramCounter + 2} = 'DESC' THEN
           CASE $${paramCounter + 1}
             WHEN 'price' THEN price
@@ -536,6 +549,12 @@ class CarSearch {
         )
       GROUP BY c.id, c.author_name, c.author_phone, s.id, l.id, b.name, cat.name
       ORDER BY
+        CASE 
+          WHEN c.vip_status = 'super_vip' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 1
+          WHEN c.vip_status = 'vip_plus' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 2
+          WHEN c.vip_status = 'vip' AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW()) THEN 3
+          ELSE 4
+        END,
         CASE 
           WHEN c.brand_id = $2 AND c.category_id = $3 THEN 1
           WHEN c.brand_id = $2 THEN 2

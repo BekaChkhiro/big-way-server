@@ -113,9 +113,9 @@ class PartModel {
       LEFT JOIN car_models cm ON p.model_id = cm.id
       ORDER BY 
         CASE 
-          WHEN p.vip_status = 'super_vip' AND p.vip_expiration_date > NOW() THEN 1
-          WHEN p.vip_status = 'vip_plus' AND p.vip_expiration_date > NOW() THEN 2
-          WHEN p.vip_status = 'vip' AND p.vip_expiration_date > NOW() THEN 3
+          WHEN p.vip_status = 'super_vip' AND (p.vip_expiration_date IS NULL OR p.vip_expiration_date > NOW()) THEN 1
+          WHEN p.vip_status = 'vip_plus' AND (p.vip_expiration_date IS NULL OR p.vip_expiration_date > NOW()) THEN 2
+          WHEN p.vip_status = 'vip' AND (p.vip_expiration_date IS NULL OR p.vip_expiration_date > NOW()) THEN 3
           ELSE 4
         END,
         p.created_at DESC
@@ -148,20 +148,25 @@ class PartModel {
         throw new Error('VIP status feature not available. Please run the database migration.');
       }
       
+      // If vip_status is 'none', always set expiration_date to NULL
+      const finalExpirationDate = vipStatus === 'none' ? null : expirationDate;
+      
       const query = `
         UPDATE parts
         SET 
           vip_status = $1::vip_status,
-          vip_expiration_date = $2::timestamp,
+          vip_expiration_date = $2::TIMESTAMP,
           vip_active = CASE 
-            WHEN $1 != 'none' AND $2::timestamp > NOW() THEN true 
-            ELSE false 
+            WHEN $1 = 'none' THEN FALSE
+            WHEN $2::TIMESTAMP IS NULL THEN FALSE
+            WHEN $2::TIMESTAMP > NOW() THEN TRUE
+            ELSE FALSE
           END
         WHERE id = $3
         RETURNING id, vip_status, vip_expiration_date, vip_active
       `;
       
-      const result = await pool.query(query, [vipStatus, expirationDate, partId]);
+      const result = await pool.query(query, [vipStatus, finalExpirationDate, partId]);
       
       if (result.rowCount === 0) {
         throw new Error(`Part with ID ${partId} not found`);
@@ -213,7 +218,7 @@ class PartModel {
       LEFT JOIN part_categories pc ON p.category_id = pc.id
       LEFT JOIN car_models cm ON p.model_id = cm.id
       WHERE COALESCE(p.vip_status, 'none') = $1
-      AND ($1 = 'none' OR p.vip_expiration_date > NOW())
+      AND ($1 = 'none' OR p.vip_expiration_date IS NULL OR p.vip_expiration_date > NOW())
       ORDER BY p.created_at DESC
       LIMIT $2 OFFSET $3
     `;

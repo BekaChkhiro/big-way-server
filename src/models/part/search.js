@@ -119,7 +119,14 @@ class PartSearch {
         }
       }
       
-      query += ` GROUP BY p.id, b.name, pc.name, cm.name ORDER BY ${orderBy}`;
+      query += ` GROUP BY p.id, b.name, pc.name, cm.name ORDER BY 
+        CASE 
+          WHEN p.vip_status = 'super_vip' AND (p.vip_expiration_date IS NULL OR p.vip_expiration_date > NOW()) THEN 1
+          WHEN p.vip_status = 'vip_plus' AND (p.vip_expiration_date IS NULL OR p.vip_expiration_date > NOW()) THEN 2
+          WHEN p.vip_status = 'vip' AND (p.vip_expiration_date IS NULL OR p.vip_expiration_date > NOW()) THEN 3
+          ELSE 4
+        END,
+        ${orderBy}`;
 
       // Add pagination
       const page = filters.page || 1;

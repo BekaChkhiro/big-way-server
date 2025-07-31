@@ -1,5 +1,6 @@
 const { CarModel, VIP_STATUS_TYPES } = require('../models/car/base');
 const { pg: pool } = require('../../config/db.config');
+const vipExpirationService = require('../services/vipExpirationService');
 
 /**
  * Controller for handling VIP status related operations
@@ -157,6 +158,9 @@ const vipController = {
       const { vipStatus, expirationDate } = req.body;
       const userId = req.user.id;
       
+      console.log(`[VIP Controller] updateVipStatus called for car ${carId} by user ${userId}`);
+      console.log(`[VIP Controller] Request body:`, req.body);
+      
       if (!carId) {
         return res.status(400).json({ error: 'Car ID is required' });
       }
@@ -197,7 +201,9 @@ const vipController = {
       
       let result;
       try {
+        console.log(`[VIP Controller] Calling CarModel.updateVipStatus(${carId}, ${vipStatus}, ${expirationDate})`);
         result = await CarModel.updateVipStatus(carId, vipStatus, expirationDate);
+        console.log(`[VIP Controller] CarModel.updateVipStatus result:`, result);
       } catch (columnError) {
         console.log('VIP columns not found in database, VIP status update skipped:', columnError.message);
         // Mock response for missing columns
@@ -207,6 +213,7 @@ const vipController = {
         };
       }
       
+      console.log(`[VIP Controller] Sending success response for car ${carId}`);
       return res.status(200).json({
         success: true,
         message: `Car ${carId} VIP status updated to ${vipStatus}`,
@@ -571,6 +578,8 @@ const vipController = {
       
       const result = await CarModel.getCarsByVipStatus(vipStatus, limit, offset);
       
+      console.log(`[VIP Controller] Result for ${vipStatus}: cars=${result.cars.length}, total=${result.total}`);
+      
       return res.status(200).json({
         success: true,
         data: result.cars,
@@ -643,6 +652,164 @@ const vipController = {
       success: true,
       data: VIP_STATUS_TYPES
     });
+  },
+
+  /**
+   * Toggle VIP auto-renewal for a car
+   * @param {*} req 
+   * @param {*} res 
+   */
+  async toggleVipAutoRenewal(req, res) {
+    try {
+      const { carId } = req.params;
+      const { enabled, days } = req.body;
+      const userId = req.user.id;
+      
+      if (!carId) {
+        return res.status(400).json({ error: 'Car ID is required' });
+      }
+      
+      if (enabled === undefined) {
+        return res.status(400).json({ error: 'Enabled status is required' });
+      }
+      
+      // Verify car ownership
+      const carQuery = `
+        SELECT id, seller_id, vip_status, vip_expiration_date
+        FROM cars
+        WHERE id = $1
+      `;
+      const carResult = await pool.query(carQuery, [carId]);
+      const car = carResult.rows[0];
+      
+      if (!car) {
+        return res.status(404).json({ error: 'Car not found' });
+      }
+      
+      if (car.seller_id !== userId) {
+        return res.status(403).json({ 
+          error: 'You can only toggle VIP auto-renewal for your own cars' 
+        });
+      }
+      
+      // Check if car has active VIP status
+      if (car.vip_status === 'none' || !car.vip_expiration_date || new Date(car.vip_expiration_date) <= new Date()) {
+        return res.status(400).json({ 
+          error: 'Car must have an active VIP status to enable auto-renewal' 
+        });
+      }
+      
+      // Update auto-renewal settings
+      const updateQuery = `
+        UPDATE cars
+        SET auto_renewal_enabled = $1,
+            auto_renewal_days = $2,
+            updated_at = NOW()
+        WHERE id = $3
+        RETURNING auto_renewal_enabled, auto_renewal_days
+      `;
+      
+      const updateResult = await pool.query(updateQuery, [
+        enabled,
+        enabled ? (days || 30) : null,
+        carId
+      ]);
+      
+      // Log the change
+      const transactionQuery = `
+        INSERT INTO balance_transactions
+        (user_id, amount, transaction_type, description, status, reference_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `;
+      
+      await pool.query(transactionQuery, [
+        userId,
+        0,
+        'auto_renewal_toggle',
+        `VIP auto-renewal ${enabled ? 'enabled' : 'disabled'} for car ID: ${carId}`,
+        'completed',
+        carId
+      ]);
+      
+      return res.status(200).json({
+        success: true,
+        message: `VIP auto-renewal ${enabled ? 'enabled' : 'disabled'} successfully`,
+        autoRenewalEnabled: updateResult.rows[0].auto_renewal_enabled,
+        autoRenewalDays: updateResult.rows[0].auto_renewal_days
+      });
+      
+    } catch (error) {
+      console.error('Error toggling VIP auto-renewal:', error);
+      return res.status(500).json({ 
+        error: 'Failed to toggle VIP auto-renewal',
+        details: error.message
+      });
+    }
+  },
+
+  /**
+   * Get VIP auto-renewal status for a car
+   * @param {*} req 
+   * @param {*} res 
+   */
+  async getVipAutoRenewalStatus(req, res) {
+    try {
+      const { carId } = req.params;
+      const userId = req.user.id;
+      
+      if (!carId) {
+        return res.status(400).json({ error: 'Car ID is required' });
+      }
+      
+      const query = `
+        SELECT 
+          c.id,
+          c.vip_status,
+          c.vip_expiration_date,
+          c.auto_renewal_enabled,
+          c.auto_renewal_days,
+          c.auto_renewal_last_processed,
+          c.seller_id,
+          vp.price as renewal_price
+        FROM cars c
+        LEFT JOIN vip_pricing vp ON vp.service_type = c.vip_status 
+          AND vp.category = 'cars'
+        WHERE c.id = $1
+      `;
+      
+      const result = await pool.query(query, [carId]);
+      const car = result.rows[0];
+      
+      if (!car) {
+        return res.status(404).json({ error: 'Car not found' });
+      }
+      
+      if (car.seller_id !== userId) {
+        return res.status(403).json({ 
+          error: 'You can only view VIP auto-renewal status for your own cars' 
+        });
+      }
+      
+      return res.status(200).json({
+        success: true,
+        data: {
+          carId: car.id,
+          vipStatus: car.vip_status,
+          vipExpirationDate: car.vip_expiration_date,
+          autoRenewalEnabled: car.auto_renewal_enabled || false,
+          autoRenewalDays: car.auto_renewal_days || 1,
+          lastProcessed: car.auto_renewal_last_processed,
+          estimatedRenewalPrice: car.renewal_price ? car.renewal_price * (car.auto_renewal_days || 1) : null
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error fetching VIP auto-renewal status:', error);
+      return res.status(500).json({ 
+        error: 'Failed to fetch VIP auto-renewal status',
+        details: error.message
+      });
+    }
   }
 };
 

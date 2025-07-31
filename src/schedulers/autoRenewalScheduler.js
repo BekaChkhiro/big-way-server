@@ -104,8 +104,12 @@ class AutoRenewalScheduler {
       
       // Log next scheduled run time
       if (this.cronJob) {
-        const nextRun = this.cronJob.nextDates(1);
-        console.log('[AUTO-RENEWAL SCHEDULER] Next scheduled run:', nextRun.toString());
+        try {
+          const nextRun = this.cronJob.nextDate ? this.cronJob.nextDate() : 'Unknown';
+          console.log('[AUTO-RENEWAL SCHEDULER] Next scheduled run:', nextRun.toString ? nextRun.toString() : nextRun);
+        } catch (error) {
+          console.log('[AUTO-RENEWAL SCHEDULER] Could not determine next run time');
+        }
       }
       
       const stats = await autoRenewalService.getAutoRenewalStats();
@@ -156,9 +160,18 @@ class AutoRenewalScheduler {
    * Get scheduler status
    */
   getStatus() {
+    let nextRun = null;
+    if (this.cronJob) {
+      try {
+        nextRun = this.cronJob.nextDate ? this.cronJob.nextDate().toString() : 'Unknown';
+      } catch (error) {
+        nextRun = 'Could not determine';
+      }
+    }
+    
     return {
       isRunning: this.isRunning,
-      nextRun: this.cronJob ? this.cronJob.nextDates(1).toString() : null,
+      nextRun: nextRun,
       timezone: 'System Default',
       schedule: '0 0 * * * (Daily at midnight 00:00)'
     };

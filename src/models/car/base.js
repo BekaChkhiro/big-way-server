@@ -293,17 +293,34 @@ class CarModel {
         console.log('VIP columns added successfully');
       }
       
+      // If vip_status is 'none', always set expiration_date to NULL
+      const finalExpirationDate = vipStatus === 'none' ? null : expirationDate;
+      
+      console.log(`[CarModel.updateVipStatus] Updating car ${carId} with vipStatus: ${vipStatus}, finalExpirationDate: ${finalExpirationDate}`);
+      
       const query = `
         UPDATE cars
         SET 
           vip_status = $1::vip_status,
-          vip_expiration_date = $2,
+          vip_expiration_date = $2::TIMESTAMP,
+          vip_active = CASE 
+            WHEN $1 = 'none' THEN FALSE
+            WHEN $2 IS NULL THEN FALSE
+            WHEN $2::TIMESTAMP > NOW() THEN TRUE
+            ELSE FALSE
+          END,
           updated_at = NOW()
         WHERE id = $3
-        RETURNING id, vip_status, vip_expiration_date
+        RETURNING id, vip_status, vip_expiration_date, vip_active
       `;
       
-      const result = await pool.query(query, [vipStatus, expirationDate, carId]);
+      console.log(`[CarModel.updateVipStatus] Executing query:`, query);
+      console.log(`[CarModel.updateVipStatus] Query parameters:`, [vipStatus, finalExpirationDate, carId]);
+      
+      const result = await pool.query(query, [vipStatus, finalExpirationDate, carId]);
+      
+      console.log(`[CarModel.updateVipStatus] Query result:`, result.rows[0]);
+      console.log(`[CarModel.updateVipStatus] Rows affected:`, result.rowCount);
       
       if (result.rowCount === 0) {
         throw new Error(`Car with ID ${carId} not found`);
@@ -318,7 +335,8 @@ class CarModel {
         return {
           id: carId,
           vip_status: vipStatus,
-          vip_expiration_date: expirationDate
+          vip_expiration_date: vipStatus === 'none' ? null : expirationDate,
+          vip_active: vipStatus !== 'none' && expirationDate && new Date(expirationDate) > new Date()
         };
       }
       throw error;
@@ -368,7 +386,7 @@ class CarModel {
       LEFT JOIN specifications s ON c.specification_id = s.id
       LEFT JOIN locations l ON c.location_id = l.id
       WHERE c.vip_status = $1
-      AND c.vip_active = true
+      AND c.vip_status != 'none'
       AND (c.vip_expiration_date IS NULL OR c.vip_expiration_date > NOW())
       ORDER BY c.updated_at DESC
       LIMIT $2 OFFSET $3
@@ -377,7 +395,7 @@ class CarModel {
     const countQuery = `
       SELECT COUNT(*) FROM cars
       WHERE vip_status = $1
-      AND vip_active = true
+      AND vip_status != 'none'
       AND (vip_expiration_date IS NULL OR vip_expiration_date > NOW())
     `;
     
@@ -385,6 +403,8 @@ class CarModel {
       pool.query(query, [vipStatus, limit, offset]),
       pool.query(countQuery, [vipStatus])
     ]);
+    
+    console.log(`[getCarsByVipStatus] VIP Status: ${vipStatus}, Cars found: ${result.rows.length}, Count result:`, countResult.rows[0]);
     
     return {
       cars: result.rows,
