@@ -24,4 +24,24 @@ router.delete('/:partId/images/:imageId', authMiddleware, PartsController.delete
 // VIP purchase route
 router.post('/vip/purchase', authMiddleware, PartsController.purchaseVipStatus.bind(PartsController));
 
+// Increment views count for a part
+router.post('/:id/views', async (req, res) => {
+  try {
+    const partId = req.params.id;
+    console.log('Incrementing views for part ID:', partId);
+    
+    // Use the incrementViews method from the Part model
+    const Part = require('../models/part');
+    await Part.incrementViews(partId);
+    
+    res.json({ success: true, message: 'View count incremented' });
+  } catch (error) {
+    console.error('Error incrementing part views:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to increment view count'
+    });
+  }
+});
+
 module.exports = router;

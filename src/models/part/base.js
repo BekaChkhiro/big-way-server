@@ -19,6 +19,7 @@ class PartModel {
           THEN true 
           ELSE false 
         END as is_vip_active,
+        p.views_count,
         b.name as brand,
         pc.name as category,
         cm.name as model,
@@ -234,6 +235,11 @@ class PartModel {
     // Then delete the part
     const result = await pool.query('DELETE FROM parts WHERE id = $1 RETURNING *', [id]);
     return result.rows[0];
+  }
+
+  static async incrementViews(id) {
+    const query = 'UPDATE parts SET views_count = views_count + 1 WHERE id = $1';
+    await pool.query(query, [id]);
   }
 }
 

@@ -1148,6 +1148,7 @@ router.get('/:id', async (req, res) => {
         c.vip_active,
         c.auto_renewal_enabled,
         c.auto_renewal_days,
+        c.views_count,
         -- Dealer profile data
         dp.id as dealer_profile_id,
         dp.company_name as dealer_company_name,
@@ -1257,6 +1258,7 @@ router.get('/:id', async (req, res) => {
       updated_at: car.updated_at,
       category_name: car.category, // დავამატეთ category_name ველი, რომელიც იყენებს car.category ღირებულებას
       vin_code: car.vin_code, // Add VIN code to the response
+      views_count: car.views_count || 0, // Add views count to the response
       // VIP fields
       vip_status: car.vip_status || 'none',
       vip_expiration_date: car.vip_expiration_date,
@@ -1384,6 +1386,26 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Increment views count for a car
+router.post('/:id/views', async (req, res) => {
+  try {
+    const carId = req.params.id;
+    console.log('Incrementing views for car ID:', carId);
+    
+    // Use the existing incrementViews method from the Car model
+    const Car = require('../models/car');
+    await Car.incrementViews(carId);
+    
+    res.json({ success: true, message: 'View count incremented' });
+  } catch (error) {
+    console.error('Error incrementing car views:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to increment view count'
     });
   }
 });

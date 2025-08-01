@@ -9,5 +9,6 @@ module.exports = {
   PartCreate,
   PartSearch,
   PartUpdate,
-  PartValidation
+  PartValidation,
+  incrementViews: PartModel.incrementViews
 };

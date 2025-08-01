@@ -11,7 +11,9 @@
     "test:watch": "NODE_ENV=test jest --watch",
     "test:coverage": "NODE_ENV=test jest --coverage",
     "seed": "node database/seeds/seed.js",
-    "migrate:vip-pricing": "node scripts/migrate-vip-pricing.js"
+    "migrate:vip-pricing": "node scripts/migrate-vip-pricing.js",
+    "migrate:views-count": "node scripts/run_views_count_migration.js",
+    "migrate:multilingual-terms": "node scripts/migrate-multilingual-terms.js"
   },
   "keywords": [],
   "author": "",
@@ -31,6 +33,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^4.2.1",
+    "node-pg-migrate": "^8.0.3",
     "passport": "^0.7.0",
     "passport-facebook": "^3.0.0",
     "passport-google-oauth20": "^2.0.0",
