@@ -321,10 +321,23 @@ class DealerService {
 
       const userId = dealerResult.rows[0].user_id;
 
+      // First, delete all cars associated with this user (set seller_id to NULL)
+      await client.query('UPDATE cars SET seller_id = NULL WHERE seller_id = $1', [userId]);
+
+      // Delete car images associated with cars that belonged to this user
+      // Note: We can't directly delete car images here since cars still exist, just with NULL seller_id
+      // The cars themselves should be handled separately if needed
+
+      // Delete wishlists associated with this user
+      await client.query('DELETE FROM wishlists WHERE user_id = $1', [userId]);
+
+      // Delete balance transactions - these should cascade automatically but let's be explicit
+      await client.query('DELETE FROM balance_transactions WHERE user_id = $1', [userId]);
+
       // Delete dealer profile
       await client.query('DELETE FROM dealer_profiles WHERE id = $1', [id]);
 
-      // Delete user account
+      // Finally, delete user account
       await client.query('DELETE FROM users WHERE id = $1', [userId]);
 
       await client.query('COMMIT');

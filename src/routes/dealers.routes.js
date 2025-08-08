@@ -4,6 +4,7 @@ const { pg: pool } = require('../../config/db.config');
 const authMiddleware = require('../middlewares/auth.middleware');
 const { upload, processAndUpload } = require('../middlewares/upload.middleware');
 const { USER_ROLES } = require('../constants/roles');
+const dealerController = require('../controllers/dealerController');
 
 // Get all dealers (Admin only)
 router.get('/', authMiddleware, async (req, res) => {
@@ -433,5 +434,11 @@ router.get('/:userId/cars', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch dealer cars' });
   }
 });
+
+// Admin-only routes using controller functions
+router.post('/', authMiddleware, dealerController.createDealer);
+router.put('/:id', authMiddleware, dealerController.updateDealerAdmin);
+router.delete('/:id', authMiddleware, dealerController.deleteDealer);
+router.post('/:id/logo', authMiddleware, upload.single('logo'), dealerController.uploadDealerLogo);
 
 module.exports = router;

@@ -78,17 +78,31 @@ class UserUpdate {
     try {
       await client.query('BEGIN');
 
-      // Validate user exists
-      await UserModel.validateUser(userId);
+      // Check if user exists (don't throw error if not found)
+      const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+      if (userCheck.rows.length === 0) {
+        // User doesn't exist, but this is not an error for delete operation
+        await client.query('COMMIT');
+        return true; // Successfully "deleted" (was already gone)
+      }
 
-      // Delete user's cars
-      await client.query('DELETE FROM cars WHERE seller_id = $1', [userId]);
+      // First, update cars to remove seller reference (set seller_id to NULL)
+      await client.query('UPDATE cars SET seller_id = NULL WHERE seller_id = $1', [userId]);
       
-      // Delete user's wishlists
+      // Delete user's wishlists - these should cascade but let's be explicit
       await client.query('DELETE FROM wishlists WHERE user_id = $1', [userId]);
       
+      // Delete balance transactions - these should cascade but let's be explicit
+      await client.query('DELETE FROM balance_transactions WHERE user_id = $1', [userId]);
+      
+      // Delete dealer profile if user is a dealer
+      await client.query('DELETE FROM dealer_profiles WHERE user_id = $1', [userId]);
+      
+      // Delete autosalon profile if user is an autosalon
+      await client.query('DELETE FROM autosalon_profiles WHERE user_id = $1', [userId]);
+      
       // Finally delete the user
-      await client.query('DELETE FROM users WHERE id = $1', [userId]);
+      const deleteResult = await client.query('DELETE FROM users WHERE id = $1', [userId]);
 
       await client.query('COMMIT');
       return true;

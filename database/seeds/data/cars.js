@@ -8,7 +8,7 @@ module.exports = [
     description: 'BMW M4 Competition with M xDrive. Pristine condition, fully loaded with premium features.',
     status: 'available',
     featured: true,
-    seller_id: 4, // dealer1
+    seller_id: 1, // admin
     specifications: {
       engine_type: 'Twin-Turbo Inline-6',
       transmission: 'automatic',
@@ -53,7 +53,7 @@ module.exports = [
     description: 'Tesla Model S Plaid. Incredible performance with latest tech features.',
     status: 'available',
     featured: true,
-    seller_id: 4, // dealer1
+    seller_id: 1, // admin
     specifications: {
       engine_type: 'Electric',
       transmission: 'automatic',
@@ -98,7 +98,7 @@ module.exports = [
     description: 'Porsche 911 GT3 with Touring Package. Track-ready performance.',
     status: 'available',
     featured: true,
-    seller_id: 5, // dealer2
+    seller_id: 1, // admin
     specifications: {
       engine_type: 'Naturally Aspirated Flat-6',
       transmission: 'manual',
@@ -143,7 +143,7 @@ module.exports = [
     description: 'Toyota RAV4 Hybrid XSE. Perfect blend of efficiency and versatility.',
     status: 'available',
     featured: false,
-    seller_id: 5, // dealer2
+    seller_id: 1, // admin
     specifications: {
       engine_type: 'Hybrid',
       transmission: 'automatic',
@@ -188,7 +188,7 @@ module.exports = [
     description: 'Toyota Camry XSE V6. Luxurious and powerful sedan.',
     status: 'available',
     featured: false,
-    seller_id: 4, // dealer1
+    seller_id: 1, // admin
     specifications: {
       engine_type: 'V6',
       transmission: 'automatic',
