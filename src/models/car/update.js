@@ -157,7 +157,7 @@ class CarUpdate {
 
   static hasBasicUpdates(carData) {
     const updateableFields = [
-      'brand_id', 'category_id', 'model', 'year', 'price',
+      'brand_id', 'category_id', 'model', 'year', 'price', 'currency',
       'description_en', 'description_ka', 'description_ru', 'status', 'featured',
       'vin_code',
       'color_highlighting_enabled', 'color_highlighting_expiration_date', 
@@ -171,7 +171,7 @@ class CarUpdate {
 
   static async updateBasicInfo(client, carId, carData) {
     const updateableFields = [
-      'brand_id', 'category_id', 'model', 'year', 'price',
+      'brand_id', 'category_id', 'model', 'year', 'price', 'currency',
       'description_en', 'description_ka', 'description_ru', 'status', 'featured',
       'vin_code',
       'color_highlighting_enabled', 'color_highlighting_expiration_date', 

@@ -613,10 +613,10 @@ class CarCreate {
       // Create car with author information
       const carResult = await client.query(
         `INSERT INTO cars 
-        (brand_id, category_id, location_id, specification_id, model, title, year, price, 
+        (brand_id, category_id, location_id, specification_id, model, title, year, price, currency,
         description_ka, description_en, description_ru, status, featured, seller_id,
         author_name, author_phone, vin_code)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING id`,
         [
           carData.brand_id,
@@ -627,6 +627,7 @@ class CarCreate {
           carData.title || `${carData.model} ${carData.year}`, // Use provided title or generate one from model and year
           carData.year,
           carData.price,
+          carData.currency || 'GEL', // Include currency field, default to GEL if not provided
           carData.description_ka,
           carData.description_en,
           carData.description_ru,
@@ -689,6 +690,7 @@ class CarCreate {
       return {
         id: carResult.rows[0].id,
         ...carData,
+        currency: carData.currency || 'GEL', // Ensure currency is included in response
         specifications,
         location_id: locationResult.rows[0].id,
         specification_id: specResult.rows[0].id,
