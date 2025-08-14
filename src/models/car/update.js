@@ -270,6 +270,66 @@ class CarUpdate {
       client.release();
     }
   }
+
+  // Admin version that skips ownership validation
+  static async updateAsAdmin(id, carData, adminId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Skip ownership validation for admin
+      // Admin can update any car
+
+      // Validate car data including VIN
+      CarValidation.validateCarData(carData);
+
+      // Update specifications
+      if (carData.specifications) {
+        CarValidation.validateSpecifications(carData.specifications);
+        await this.updateSpecifications(client, id, carData.specifications);
+      }
+
+      // Update location
+      if (carData.location) {
+        const validatedLocation = CarValidation.validateLocation(carData.location);
+        await this.updateLocation(client, id, validatedLocation);
+      }
+
+      // Update car basic info
+      if (this.hasBasicUpdates(carData)) {
+        await this.updateBasicInfo(client, id, carData);
+      }
+
+      // Commit the transaction
+      await client.query('COMMIT');
+
+      // Return updated car data
+      const result = await client.query(`
+        SELECT c.*, 
+               s.*, 
+               l.*,
+               u.first_name as seller_first_name,
+               u.last_name as seller_last_name,
+               u.phone as seller_phone,
+               b.name as brand,
+               cat.name as category
+        FROM cars c
+        JOIN specifications s ON c.specification_id = s.id
+        JOIN locations l ON c.location_id = l.id
+        JOIN users u ON c.seller_id = u.id
+        JOIN brands b ON c.brand_id = b.id
+        JOIN categories cat ON c.category_id = cat.id
+        WHERE c.id = $1
+      `, [id]);
+
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 module.exports = CarUpdate;

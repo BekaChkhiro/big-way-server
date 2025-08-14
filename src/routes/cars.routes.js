@@ -5,7 +5,7 @@ const fs = require('fs').promises;
 const CarCreate = require('../models/car/create');
 const CarUpdate = require('../models/car/update');
 const { pg: pool } = require('../../config/db.config');
-const { BRAND_MODELS } = require('../models/car/base');
+const { BRAND_MODELS, CarModel } = require('../models/car/base');
 const authMiddleware = require('../middlewares/auth.middleware');
 const { upload, processAndUpload, setCacheHeaders } = require('../middlewares/upload.middleware');
 
@@ -437,7 +437,11 @@ router.put('/:id', authMiddleware, carUpload.array('images', 10), async (req, re
       author_phone: updateData.author_phone
     });
     
-    const car = await CarUpdate.update(parseInt(id), updateData, req.user.id);
+    // Admin can edit any car, regular users only their own cars
+    const isAdmin = req.user.role === 'admin';
+    const car = isAdmin 
+      ? await CarUpdate.updateAsAdmin(parseInt(id), updateData, req.user.id)
+      : await CarUpdate.update(parseInt(id), updateData, req.user.id);
     res.status(200).json({
       success: true,
       data: car
@@ -1257,6 +1261,7 @@ router.get('/:id', async (req, res) => {
       updated_at: car.updated_at,
       category_name: car.category, // დავამატეთ category_name ველი, რომელიც იყენებს car.category ღირებულებას
       vin_code: car.vin_code, // Add VIN code to the response
+      views_count: car.views_count || 0, // Add views count to the response
       // VIP fields
       vip_status: car.vip_status || 'none',
       vip_expiration_date: car.vip_expiration_date,
@@ -1381,6 +1386,48 @@ router.get('/:id', async (req, res) => {
     res.json(formattedCar);
   } catch (error) {
     console.error('Error fetching car:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Increment car views (no authentication required)
+router.post('/:id/views', async (req, res) => {
+  try {
+    const carId = req.params.id;
+    console.log('Incrementing views for car ID:', carId);
+    
+    // Validate the car ID
+    if (!carId || isNaN(carId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid car ID'
+      });
+    }
+    
+    // Check if the car exists before incrementing views
+    const carCheckQuery = 'SELECT id FROM cars WHERE id = $1 AND status = $2';
+    const carCheckResult = await pool.query(carCheckQuery, [carId, 'available']);
+    
+    if (carCheckResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Car not found'
+      });
+    }
+    
+    // Increment the views count using the CarModel method
+    await CarModel.incrementViews(carId);
+    
+    console.log('Successfully incremented views for car ID:', carId);
+    res.status(200).json({
+      success: true,
+      message: 'Views count incremented successfully'
+    });
+  } catch (error) {
+    console.error('Error incrementing car views:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error'

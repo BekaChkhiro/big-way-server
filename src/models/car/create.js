@@ -994,6 +994,13 @@ class CarCreate {
         `;
 
         // მოვამზადოთ მნიშვნელობების მასივი სწორი ტიპებით
+        console.log('[CarCreate.update] Author info being saved:', {
+          author_name: updateData.author_name,
+          author_phone: updateData.author_phone,
+          author_name_type: typeof updateData.author_name,
+          author_phone_type: typeof updateData.author_phone
+        });
+        
         const updateParams = [
           updateData.author_name || null,
           updateData.author_phone || null,

@@ -7,7 +7,7 @@ class UserModel {
     try {
       // First try with a query that includes all possible fields
       const query = `
-        SELECT id, username, email, first_name, last_name, age, phone, role, created_at
+        SELECT id, username, email, first_name, last_name, age, gender, phone, role, created_at
         FROM users 
         WHERE id = $1
       `;
@@ -36,7 +36,7 @@ class UserModel {
     try {
       // First try with specific fields instead of SELECT *
       const query = `
-        SELECT id, username, email, password, first_name, last_name, age, phone, role, created_at
+        SELECT id, username, email, password, first_name, last_name, age, gender, phone, role, created_at
         FROM users 
         WHERE email = $1
       `;
@@ -65,7 +65,7 @@ class UserModel {
     try {
       // First try with specific fields instead of SELECT *
       const query = `
-        SELECT id, username, email, password, first_name, last_name, age, phone, role, created_at
+        SELECT id, username, email, password, first_name, last_name, age, gender, phone, role, created_at
         FROM users 
         WHERE username = $1
       `;

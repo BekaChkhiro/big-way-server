@@ -46,17 +46,15 @@ router.put('/update-profile', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: "Username, first name, and last name are required" });
     }
 
-    // Handle gender mapping - database only accepts 'male' or 'female'
-    let mappedGender = gender;
-    
-    // Make sure gender is one of the valid values
-    if (!mappedGender || (mappedGender !== 'male' && mappedGender !== 'female')) {
-      // Default to 'male' when gender is 'other' or invalid
-      mappedGender = 'male';
+    // Validate gender - database only accepts 'male' or 'female'
+    if (!gender || (gender !== 'male' && gender !== 'female')) {
+      return res.status(400).json({ 
+        message: "Invalid gender value. Must be 'male' or 'female'" 
+      });
     }
     
     // Log the gender being saved
-    console.log('Saving gender value to database:', mappedGender);
+    console.log('Saving gender value to database:', gender);
 
     // Log the user ID to help with debugging
     console.log('Updating profile for user ID:', userId);
@@ -67,7 +65,7 @@ router.put('/update-profile', authMiddleware, async (req, res) => {
        SET username = $1, phone = $2, first_name = $3, last_name = $4, age = $5, gender = $6 
        WHERE id = $7
        RETURNING id, username, email, first_name, last_name, age, gender, phone, role, created_at, profile_completed, google_id`,
-      [username, phone, first_name, last_name, age, mappedGender, userId]
+      [username, phone, first_name, last_name, age, gender, userId]
     );
 
     if (result.rows.length === 0) {
