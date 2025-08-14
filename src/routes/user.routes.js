@@ -108,4 +108,57 @@ router.get('/profile-status', authMiddleware, async (req, res) => {
   }
 });
 
+// One-time: sync current profile contact info to all user's cars
+router.post('/sync-contact-to-cars', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { syncName = false, syncPhone = false } = req.body || {};
+
+    if (!syncName && !syncPhone) {
+      return res.status(400).json({ message: 'No fields selected to sync' });
+    }
+
+    // Fetch current user profile values
+    const userResult = await pool.query(
+      `SELECT first_name, last_name, phone FROM users WHERE id = $1`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const { first_name, last_name, phone } = userResult.rows[0];
+    const authorName = `${first_name || ''} ${last_name || ''}`.trim();
+
+    const updates = [];
+    const params = [];
+
+    if (syncName) {
+      if (!authorName) {
+        return res.status(400).json({ message: 'Profile name is empty, cannot sync' });
+      }
+      updates.push(`author_name = $${params.length + 1}`);
+      params.push(authorName);
+    }
+
+    if (syncPhone) {
+      if (!phone) {
+        return res.status(400).json({ message: 'Profile phone is empty, cannot sync' });
+      }
+      updates.push(`author_phone = $${params.length + 1}`);
+      params.push(phone);
+    }
+
+    params.push(userId);
+    const sql = `UPDATE cars SET ${updates.join(', ')} WHERE seller_id = $${params.length}`;
+    const result = await pool.query(sql, params);
+
+    return res.json({ message: 'Contact info synced successfully', updated: result.rowCount || 0 });
+  } catch (error) {
+    console.error('Error syncing contact info to cars:', error);
+    return res.status(500).json({ message: 'Server error while syncing contact info' });
+  }
+});
+
 module.exports = router;

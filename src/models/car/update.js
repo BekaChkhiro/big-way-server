@@ -160,6 +160,8 @@ class CarUpdate {
       'brand_id', 'category_id', 'model', 'year', 'price', 'currency',
       'description_en', 'description_ka', 'description_ru', 'status', 'featured',
       'vin_code',
+      // Allow updating per-listing contact fields
+      'author_name', 'author_phone',
       'color_highlighting_enabled', 'color_highlighting_expiration_date', 
       'color_highlighting_total_days', 'color_highlighting_remaining_days',
       'auto_renewal_enabled', 'auto_renewal_expiration_date',
@@ -174,6 +176,8 @@ class CarUpdate {
       'brand_id', 'category_id', 'model', 'year', 'price', 'currency',
       'description_en', 'description_ka', 'description_ru', 'status', 'featured',
       'vin_code',
+      // Include author fields for contact info updates
+      'author_name', 'author_phone',
       'color_highlighting_enabled', 'color_highlighting_expiration_date', 
       'color_highlighting_total_days', 'color_highlighting_remaining_days',
       'auto_renewal_enabled', 'auto_renewal_expiration_date',
