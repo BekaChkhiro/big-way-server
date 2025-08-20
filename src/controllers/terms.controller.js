@@ -3,7 +3,8 @@ const TermsModel = require('../models/terms.model');
 class TermsController {
   static async getTerms(req, res) {
     try {
-      const terms = await TermsModel.getTerms();
+      const lang = req.query.lang || 'ka';
+      const terms = await TermsModel.getTerms(lang);
       res.status(200).json({
         success: true,
         data: terms
@@ -20,7 +21,8 @@ class TermsController {
   static async getTermById(req, res) {
     try {
       const { id } = req.params;
-      const term = await TermsModel.getTermById(id);
+      const lang = req.query.lang || 'ka';
+      const term = await TermsModel.getTermById(id, lang);
       
       if (!term) {
         return res.status(404).json({
@@ -44,18 +46,22 @@ class TermsController {
 
   static async createTerm(req, res) {
     try {
-      const { title, content, section_order } = req.body;
+      const { title_ka, title_en, title_ru, content_ka, content_en, content_ru, section_order } = req.body;
 
-      if (!title || !content) {
+      if (!title_ka || !content_ka) {
         return res.status(400).json({
           success: false,
-          message: 'Title and content are required'
+          message: 'Georgian title and content are required'
         });
       }
 
       const newTerm = await TermsModel.createTerm({
-        title,
-        content,
+        title_ka,
+        title_en,
+        title_ru,
+        content_ka,
+        content_en,
+        content_ru,
         section_order: section_order || 0
       });
 
@@ -76,18 +82,22 @@ class TermsController {
   static async updateTerm(req, res) {
     try {
       const { id } = req.params;
-      const { title, content, section_order } = req.body;
+      const { title_ka, title_en, title_ru, content_ka, content_en, content_ru, section_order } = req.body;
 
-      if (!title || !content) {
+      if (!title_ka || !content_ka) {
         return res.status(400).json({
           success: false,
-          message: 'Title and content are required'
+          message: 'Georgian title and content are required'
         });
       }
 
       const updatedTerm = await TermsModel.updateTerm(id, {
-        title,
-        content,
+        title_ka,
+        title_en,
+        title_ru,
+        content_ka,
+        content_en,
+        content_ru,
         section_order
       });
 
