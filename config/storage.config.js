@@ -54,7 +54,7 @@ module.exports = {
   bucket: process.env.AWS_BUCKET_NAME,
   imageSettings: {
     formats: ['image/jpeg', 'image/png', 'image/webp'],
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 10 * 1024 * 1024, // 10MB
     dimensions: {
       thumbnail: { width: 200, height: 150 },
       medium: { width: 800, height: 600 },
