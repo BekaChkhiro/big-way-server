@@ -275,6 +275,124 @@ class CarUpdate {
     }
   }
 
+  static async deleteImage(imageId, sellerId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Get the image details and verify ownership
+      const imageResult = await client.query(
+        `SELECT ci.*, c.seller_id
+         FROM car_images ci
+         JOIN cars c ON ci.car_id = c.id
+         WHERE ci.id = $1`,
+        [imageId]
+      );
+
+      if (imageResult.rows.length === 0) {
+        throw new Error('Image not found');
+      }
+
+      const image = imageResult.rows[0];
+
+      // Check ownership
+      if (image.seller_id !== sellerId) {
+        throw new Error('You do not have permission to delete this image');
+      }
+
+      // Check if it's the only image
+      const imageCountResult = await client.query(
+        'SELECT COUNT(*) FROM car_images WHERE car_id = $1',
+        [image.car_id]
+      );
+
+      if (parseInt(imageCountResult.rows[0].count) === 1) {
+        throw new Error('Cannot delete the last image. A car must have at least one image.');
+      }
+
+      // If this is the primary image, set another one as primary
+      if (image.is_primary) {
+        await client.query(
+          `UPDATE car_images
+           SET is_primary = true
+           WHERE car_id = $1 AND id != $2
+           LIMIT 1`,
+          [image.car_id, imageId]
+        );
+      }
+
+      // Delete from database
+      await client.query('DELETE FROM car_images WHERE id = $1', [imageId]);
+
+      await client.query('COMMIT');
+
+      // After successful DB deletion, delete from S3
+      const { s3, bucket } = require('../../../config/storage.config');
+      const imagesToDelete = [];
+
+      ['image_url', 'thumbnail_url', 'medium_url', 'large_url'].forEach(urlType => {
+        if (image[urlType]) {
+          const key = image[urlType].replace(`https://${bucket}.s3.amazonaws.com/`, '');
+          imagesToDelete.push({ Key: key });
+        }
+      });
+
+      if (imagesToDelete.length > 0) {
+        await s3.deleteObjects({
+          Bucket: bucket,
+          Delete: { Objects: imagesToDelete }
+        }).promise();
+      }
+
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  static async setPrimaryImage(carId, imageId, sellerId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify ownership
+      await CarValidation.validateOwnership(client, carId, sellerId);
+
+      // Verify the image belongs to this car
+      const imageResult = await client.query(
+        'SELECT id FROM car_images WHERE id = $1 AND car_id = $2',
+        [imageId, carId]
+      );
+
+      if (imageResult.rows.length === 0) {
+        throw new Error('Image not found for this car');
+      }
+
+      // Update all images to not be primary
+      await client.query(
+        'UPDATE car_images SET is_primary = false WHERE car_id = $1',
+        [carId]
+      );
+
+      // Set the new primary image
+      await client.query(
+        'UPDATE car_images SET is_primary = true WHERE id = $1',
+        [imageId]
+      );
+
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // Admin version that skips ownership validation
   static async updateAsAdmin(id, carData, adminId) {
     const client = await pool.connect();

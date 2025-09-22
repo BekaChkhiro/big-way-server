@@ -1185,6 +1185,69 @@ class CarCreate {
       client.release();
     }
   }
+
+  static async addImages(carId, images, userId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify ownership
+      const ownershipQuery = 'SELECT seller_id FROM cars WHERE id = $1';
+      const ownershipResult = await client.query(ownershipQuery, [carId]);
+
+      if (ownershipResult.rows.length === 0) {
+        throw new Error('Car not found');
+      }
+
+      if (ownershipResult.rows[0].seller_id !== userId) {
+        throw new Error('You do not have permission to add images to this car');
+      }
+
+      // Check current image count
+      const countQuery = 'SELECT COUNT(*) FROM car_images WHERE car_id = $1';
+      const countResult = await client.query(countQuery, [carId]);
+      const currentImageCount = parseInt(countResult.rows[0].count);
+
+      if (currentImageCount + images.length > 15) {
+        throw new Error(`Cannot add ${images.length} images. Maximum 15 images allowed per car. Current: ${currentImageCount}`);
+      }
+
+      // Insert new images
+      const insertedImages = [];
+      for (const image of images) {
+        const insertQuery = `
+          INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url, is_primary)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING *
+        `;
+
+        // Set first image as primary if no images exist yet
+        const isPrimary = currentImageCount === 0 && insertedImages.length === 0;
+
+        const result = await client.query(insertQuery, [
+          carId,
+          image.url || image.image_url,
+          image.thumbnail_url,
+          image.medium_url,
+          image.large_url,
+          isPrimary
+        ]);
+
+        insertedImages.push(result.rows[0]);
+      }
+
+      await client.query('COMMIT');
+
+      console.log(`Successfully added ${insertedImages.length} images to car ${carId}`);
+      return insertedImages;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error adding images to car:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 module.exports = new CarCreate();

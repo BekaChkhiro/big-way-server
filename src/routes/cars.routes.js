@@ -349,33 +349,130 @@ router.post('/', authMiddleware, carUpload.array('images', 10), async (req, res)
 
 // Add images to existing car listing (requires authentication)
 router.post('/:id/images', authMiddleware, carUpload.array('images'), async (req, res) => {
+  console.log('=== POST /:id/images endpoint hit ===');
+  console.log('Request method:', req.method);
+  console.log('Request URL:', req.url);
+  console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Request content-type:', req.get('content-type'));
+  console.log('Request body keys:', Object.keys(req.body));
+  console.log('Request files:', req.files ? `${req.files.length} files` : 'No files');
+
   try {
     const { id } = req.params;
-    
-    // Process and upload images to AWS S3
-    let images = [];
-    try {
-      const processedImages = await processAndUpload(req.files);
-      console.log('Images processed and uploaded to S3:', processedImages);
-      
-      // Format the images for database storage
-      images = processedImages.map(img => ({
-        url: img.original,
-        thumbnail_url: img.thumbnail,
-        medium_url: img.medium,
-        large_url: img.large
-      }));
-    } catch (uploadError) {
-      console.error('Error uploading images to S3:', uploadError);
-      // No fallback to local storage - S3 is required
-      return res.status(500).json({
+
+    console.log('=== Adding images to car ===');
+    console.log('Car ID:', id);
+    console.log('Files received:', req.files ? req.files.length : 0);
+    console.log('User ID:', req.user ? req.user.id : 'No user');
+    console.log('Body:', req.body);
+
+    // Debug file details
+    if (req.files && req.files.length > 0) {
+      console.log('File details:');
+      req.files.forEach((file, index) => {
+        console.log(`File ${index}:`, {
+          fieldname: file.fieldname,
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size,
+          hasBuffer: !!file.buffer
+        });
+      });
+    } else {
+      console.log('No files found in req.files');
+      console.log('req.files is:', req.files);
+    }
+
+    if (!req.files || req.files.length === 0) {
+      console.log('Returning 400 - No images provided');
+      return res.status(400).json({
         success: false,
-        error: 'Image upload failed. S3 storage is required.'
+        error: 'No images provided'
       });
     }
 
-    // Add images to the car
-    await CarCreate.addImages(parseInt(id), images, req.user.id);
+    // Process and upload images to AWS S3
+    let images = [];
+    try {
+      console.log('Starting S3 upload process...');
+      console.log('Files to process:', req.files.map(f => ({
+        originalname: f.originalname,
+        size: f.size,
+        mimetype: f.mimetype,
+        hasBuffer: !!f.buffer
+      })));
+
+      const processedImages = await processAndUpload(req.files);
+      console.log('Images processed and uploaded to S3:', JSON.stringify(processedImages, null, 2));
+
+      // Insert images directly into database like in create method
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Verify car ownership
+        const ownershipQuery = 'SELECT seller_id FROM cars WHERE id = $1';
+        const ownershipResult = await client.query(ownershipQuery, [id]);
+
+        if (ownershipResult.rows.length === 0) {
+          throw new Error('Car not found');
+        }
+
+        if (ownershipResult.rows[0].seller_id !== req.user.id) {
+          throw new Error('You do not have permission to add images to this car');
+        }
+
+        // Insert images using the same logic as create method
+        images = [];
+        for (let i = 0; i < processedImages.length; i++) {
+          const processedImage = processedImages[i];
+          console.log(`Inserting image ${i}:`, processedImage);
+
+          const imageResult = await client.query(
+            `INSERT INTO car_images (car_id, image_url, thumbnail_url, medium_url, large_url, is_primary)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING *`,
+            [
+              parseInt(id),
+              processedImage.original,
+              processedImage.thumbnail,
+              processedImage.medium,
+              processedImage.large,
+              false // Don't set as primary automatically
+            ]
+          );
+
+          images.push(imageResult.rows[0]);
+        }
+
+        await client.query('COMMIT');
+        console.log('Images successfully inserted:', images.length);
+        client.release();
+
+      } catch (dbError) {
+        await client.query('ROLLBACK');
+        client.release();
+        throw dbError;
+      }
+
+    } catch (uploadError) {
+      console.error('Error uploading images to S3:', uploadError);
+      console.error('S3 upload error details:', {
+        message: uploadError.message,
+        stack: uploadError.stack,
+        code: uploadError.code
+      });
+
+      // Return the specific S3 error for debugging
+      return res.status(500).json({
+        success: false,
+        error: 'Image upload failed. S3 storage is required.',
+        details: uploadError.message,
+        stack: uploadError.stack
+      });
+    }
+
+    console.log('Images successfully added to database:', images.length);
 
     res.status(200).json({
       success: true,
@@ -1387,6 +1484,49 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching car:', error);
     res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Delete a specific car image (requires authentication)
+router.delete('/images/:imageId', authMiddleware, async (req, res) => {
+  try {
+    const { imageId } = req.params;
+
+    await CarUpdate.deleteImage(parseInt(imageId), req.user.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Image deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting car image:', error);
+    res.status(error.message === 'Image not found' ? 404 :
+               error.message.includes('permission') ? 403 :
+               error.message.includes('last image') ? 400 : 500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Set a car image as primary (requires authentication)
+router.put('/:carId/images/:imageId/primary', authMiddleware, async (req, res) => {
+  try {
+    const { carId, imageId } = req.params;
+
+    await CarUpdate.setPrimaryImage(parseInt(carId), parseInt(imageId), req.user.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Primary image set successfully'
+    });
+  } catch (error) {
+    console.error('Error setting primary image:', error);
+    res.status(error.message === 'Image not found for this car' ? 404 :
+               error.message.includes('permission') ? 403 : 500).json({
       success: false,
       error: error.message || 'Internal server error'
     });
