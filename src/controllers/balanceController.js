@@ -140,10 +140,11 @@ exports.initializeOnlinePayment = async (req, res) => {
     
     // Define common variables for all payment providers
     const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
-    const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
-    
+    // Use production server URL for callbacks (must be publicly accessible)
+    const apiBaseUrl = process.env.BASE_URL || 'https://big-way-server.onrender.com';
+
     console.log('Client base URL for redirect:', clientBaseUrl);
-    console.log('API base URL:', apiBaseUrl);
+    console.log('API base URL for callbacks:', apiBaseUrl);
     
     // Initialize payment based on selected bank
     switch (selectedBank) {
@@ -317,64 +318,97 @@ exports.initializeOnlinePayment = async (req, res) => {
  */
 exports.handlePaymentCallback = async (req, res) => {
   try {
-    const { transaction_id, order_id, status } = req.body;
-    
-    console.log('Payment callback received:', req.body);
-    
-    if (!transaction_id || !order_id) {
-      return res.status(400).json({ message: 'Missing required parameters' });
+    console.log('=== FLITT PAYMENT CALLBACK RECEIVED ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Request query:', JSON.stringify(req.query, null, 2));
+    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+
+    // Flitt may send data in different formats, check both body and query
+    const callbackData = req.body.response || req.body;
+    const { transaction_id, order_id, payment_id, order_status, status } = callbackData;
+
+    console.log('Extracted data:', { transaction_id, order_id, payment_id, order_status, status });
+
+    // Try to find order_id from different possible fields
+    const orderId = order_id || callbackData.order_id || callbackData.merchant_order_id;
+
+    if (!orderId) {
+      console.error('Missing order_id in callback. Full callback data:', callbackData);
+      return res.status(400).json({ message: 'Missing order_id parameter' });
     }
-    
-    // Verify payment status with Flitt
-    const paymentVerification = await verifyPayment(transaction_id);
-    
+
     // Find the corresponding transaction in our database
     const transactionQuery = `
       SELECT * FROM balance_transactions WHERE external_reference = $1
     `;
-    const transactionResult = await pool.query(transactionQuery, [order_id]);
-    
+    const transactionResult = await pool.query(transactionQuery, [orderId]);
+
     if (transactionResult.rows.length === 0) {
-      console.error('Transaction not found for order_id:', order_id);
+      console.error('Transaction not found for order_id:', orderId);
       return res.status(404).json({ message: 'Transaction not found' });
     }
-    
+
     const transaction = transactionResult.rows[0];
-    
-    // Process based on payment status
-    if (paymentVerification.status === 'success' || status === 'success') {
+    console.log('Found transaction:', transaction.id);
+
+    // Check payment status - Flitt uses 'approved' or 'order_status'
+    const isSuccessful =
+      order_status === 'approved' ||
+      order_status === 'APPROVED' ||
+      status === 'success' ||
+      status === 'approved' ||
+      callbackData.response_status === 'success';
+
+    console.log('Payment status check:', { order_status, status, isSuccessful });
+
+    if (isSuccessful) {
       // Start transaction
       await pool.query('BEGIN');
-      
-      // Update transaction status to completed
-      await pool.query(
-        `UPDATE balance_transactions SET status = 'completed', payment_data = $1 WHERE id = $2`,
-        [JSON.stringify({...req.body, verification: paymentVerification}), transaction.id]
-      );
-      
-      // Update user balance
-      await pool.query(
-        `UPDATE users SET balance = balance + $1 WHERE id = $2`,
-        [transaction.amount, transaction.user_id]
-      );
-      
-      // Commit transaction
-      await pool.query('COMMIT');
-      
-      console.log(`Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
+
+      try {
+        // Update transaction status to completed
+        await pool.query(
+          `UPDATE balance_transactions SET status = 'completed', payment_data = $1 WHERE id = $2`,
+          [JSON.stringify({
+            callback_data: callbackData,
+            processed_at: new Date().toISOString(),
+            provider: 'flitt'
+          }), transaction.id]
+        );
+
+        // Update user balance
+        await pool.query(
+          `UPDATE users SET balance = balance + $1 WHERE id = $2`,
+          [transaction.amount, transaction.user_id]
+        );
+
+        // Commit transaction
+        await pool.query('COMMIT');
+
+        console.log(`✅ Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
+      } catch (dbError) {
+        await pool.query('ROLLBACK');
+        console.error('Database error:', dbError);
+        throw dbError;
+      }
     } else {
       // Update transaction status to failed
       await pool.query(
         `UPDATE balance_transactions SET status = 'failed', payment_data = $1 WHERE id = $2`,
-        [JSON.stringify({...req.body, verification: paymentVerification}), transaction.id]
+        [JSON.stringify({
+          callback_data: callbackData,
+          processed_at: new Date().toISOString(),
+          provider: 'flitt'
+        }), transaction.id]
       );
-      
-      console.log(`Payment failed for transaction ${transaction.id}`);
+
+      console.log(`❌ Payment failed for transaction ${transaction.id}`);
     }
-    
+
     // Always respond with success to Flitt to acknowledge receipt
+    console.log('Sending 200 OK response to Flitt');
     return res.status(200).json({ success: true });
-    
+
   } catch (error) {
     console.error('Error processing payment callback:', error);
     return res.status(500).json({ message: 'Server error processing payment callback' });
