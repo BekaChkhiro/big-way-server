@@ -246,8 +246,8 @@ exports.initializeOnlinePayment = async (req, res) => {
             orderId,
             description: `Big Way Balance Top-up (${amount} GEL)`,
             amount, // Amount in GEL
-            redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=flitt`, // User redirect (GET)
-            callbackUrl: `${apiBaseUrl}/api/balance/flitt-callback` // Server webhook (POST)
+            redirectUrl: `${apiBaseUrl}/api/balance/flitt-redirect?orderId=${orderId}`, // Response URL (POST from Flitt, then redirect user)
+            callbackUrl: `${apiBaseUrl}/api/balance/flitt-callback` // Server webhook (POST for payment confirmation)
           };
 
           console.log('Flitt payment data prepared:', {
@@ -416,6 +416,41 @@ exports.handlePaymentCallback = async (req, res) => {
 };
 
 /**
+ * Handle Flitt redirect after payment (receives POST from Flitt)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.handleFlittRedirect = async (req, res) => {
+  try {
+    console.log('=== FLITT REDIRECT RECEIVED ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Request query:', JSON.stringify(req.query, null, 2));
+
+    // Get orderId from query or body
+    const orderId = req.query.orderId || req.body.order_id || req.body.orderId;
+    const orderStatus = req.body.order_status || req.body.status;
+
+    console.log('Extracted:', { orderId, orderStatus });
+
+    // Determine status for frontend
+    const status = (orderStatus === 'approved' || orderStatus === 'APPROVED') ? 'success' : 'pending';
+
+    // Get frontend URL
+    const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
+    const redirectUrl = `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=${status}&provider=flitt`;
+
+    console.log('Redirecting user to:', redirectUrl);
+
+    // Redirect user to frontend
+    return res.redirect(redirectUrl);
+  } catch (error) {
+    console.error('Error handling Flitt redirect:', error);
+    const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
+    return res.redirect(`${clientBaseUrl}/profile/balance?error=payment-processing-failed`);
+  }
+};
+
+/**
  * Handle payment completion redirect
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -426,7 +461,7 @@ exports.paymentComplete = async (req, res) => {
     const orderId = req.query.orderId || req.body.orderId;
     const userId = req.query.userId || req.body.userId;
     const status = req.query.status || req.body.status || 'pending';
-    
+
     // Redirect to the client-side payment completion page
     res.redirect(`${BASE_URL.replace('/api', '')}/profile/balance/payment-complete?orderId=${orderId}&status=${status}`);
   } catch (error) {

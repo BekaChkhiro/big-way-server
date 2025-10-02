@@ -13,7 +13,8 @@ router.post('/add', authMiddleware, balanceController.addFunds);
 router.post('/add-online', authMiddleware, balanceController.initializeOnlinePayment);
 
 // Flitt payment routes
-router.post('/flitt-callback', balanceController.handlePaymentCallback);
+router.post('/flitt-redirect', balanceController.handleFlittRedirect); // POST from Flitt, redirects user to frontend
+router.post('/flitt-callback', balanceController.handlePaymentCallback); // Webhook for payment confirmation
 router.post('/payment-callback', balanceController.handlePaymentCallback); // Legacy route
 router.get('/payment-complete', balanceController.paymentComplete);
 router.post('/payment-complete', balanceController.paymentComplete);
