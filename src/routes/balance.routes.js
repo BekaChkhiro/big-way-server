@@ -12,14 +12,16 @@ router.post('/add', authMiddleware, balanceController.addFunds);
 // Online payment routes for balance
 router.post('/add-online', authMiddleware, balanceController.initializeOnlinePayment);
 
-// Default Flitt payment routes
-router.post('/payment-callback', balanceController.handlePaymentCallback);
+// Flitt payment routes
+router.post('/flitt-callback', balanceController.handlePaymentCallback);
+router.post('/payment-callback', balanceController.handlePaymentCallback); // Legacy route
 router.get('/payment-complete', balanceController.paymentComplete);
 router.post('/payment-complete', balanceController.paymentComplete);
 
 // Bank of Georgia payment routes
 router.get('/bog-payment', balanceController.bogPaymentPage);
-router.post('/bog-payment-callback', balanceController.handleBogPaymentCallback);
+router.post('/bog-callback', balanceController.handleBogPaymentCallback);
+router.post('/bog-payment-callback', balanceController.handleBogPaymentCallback); // Legacy route
 
 // TBC Bank payment routes
 router.get('/tbc-payment', balanceController.tbcPaymentPage);

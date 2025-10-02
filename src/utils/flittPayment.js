@@ -75,28 +75,34 @@ function generateSignature(data) {
  * @param {string} paymentData.description - Description of the payment
  * @param {number} paymentData.amount - Amount in GEL (smallest currency unit)
  * @param {string} paymentData.redirectUrl - URL to redirect after payment
+ * @param {string} paymentData.callbackUrl - URL for server callback (webhook)
  * @returns {Promise<Object>} - Payment session data including checkout URL
  */
 async function createPaymentSession(paymentData) {
   try {
-    const { orderId, description, amount, redirectUrl } = paymentData;
+    const { orderId, description, amount, redirectUrl, callbackUrl } = paymentData;
     
     console.log('Starting Flitt payment session creation with data:', {
       orderId,
       description,
       amount,
-      redirectUrl
+      redirectUrl,
+      callbackUrl
     });
-    
+
     // Validate inputs
     if (!orderId || !description || !amount || amount <= 0) {
       throw new Error('Invalid payment data provided');
     }
-    
+
+    if (!callbackUrl) {
+      throw new Error('Callback URL is required for Flitt payment');
+    }
+
     // Format amount - convert to lowest currency unit (tetri)
     const amountInTetri = Math.round(amount * 100).toString();
     console.log(`Amount conversion: ${amount} GEL -> ${amountInTetri} tetri`);
-    
+
     // Prepare request data according to Flitt API requirements
     const requestParams = {
       order_id: orderId,
@@ -104,8 +110,8 @@ async function createPaymentSession(paymentData) {
       currency: 'GEL',
       amount: amountInTetri,
       merchant_id: parseInt(FLITT_CONFIG.merchantId, 10),
-      response_url: redirectUrl,
-      server_callback_url: redirectUrl, // Also use as callback URL
+      response_url: redirectUrl, // User redirect (GET) - frontend page
+      server_callback_url: callbackUrl, // Server webhook (POST) - backend API
       version: '1.0.1' // Add API version as required by Flitt
     };
     
