@@ -238,22 +238,23 @@ exports.initializeOnlinePayment = async (req, res) => {
       default:
         try {
           console.log('Starting Flitt payment initialization...');
-          
+
           // Initialize payment with Flitt (default)
           const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
           const paymentData = {
             orderId,
             description: `Big Way Balance Top-up (${amount} GEL)`,
             amount, // Amount in GEL
-            redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=flitt`
+            redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=flitt`, // User redirect (GET)
+            callbackUrl: `${apiBaseUrl}/api/balance/flitt-callback` // Server webhook (POST)
           };
-          
+
           console.log('Flitt payment data prepared:', {
             ...paymentData,
             baseUrl: BASE_URL,
             apiBaseUrl: apiBaseUrl
           });
-          
+
           // Create payment session with Flitt
           paymentSession = await createPaymentSession(paymentData);
           console.log('Flitt payment session created successfully:', paymentSession);
