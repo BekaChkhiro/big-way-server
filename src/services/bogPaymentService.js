@@ -94,7 +94,7 @@ async function createOrder(orderData) {
       description, 
       shopOrderId, 
       redirectUrl,
-      callbackUrl = "https://autovend.ge/api/balance/bog-callback",
+      callbackUrl = process.env.BASE_URL ? `${process.env.BASE_URL}/api/balance/bog-callback` : "https://big-way-server.onrender.com/api/balance/bog-callback",
       ttl = 30,
       currency = "GEL",
       paymentMethods = null,

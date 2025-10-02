@@ -21,7 +21,8 @@ router.post('/payment-complete', balanceController.paymentComplete);
 
 // Bank of Georgia payment routes
 router.get('/bog-payment', balanceController.bogPaymentPage);
-router.post('/bog-callback', balanceController.handleBogPaymentCallback);
+router.get('/bog-redirect', balanceController.handleBogRedirect); // Redirect from BOG after payment
+router.post('/bog-callback', balanceController.handleBogPaymentCallback); // Webhook for payment confirmation
 router.post('/bog-payment-callback', balanceController.handleBogPaymentCallback); // Legacy route
 
 // TBC Bank payment routes

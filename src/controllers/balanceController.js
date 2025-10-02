@@ -166,8 +166,8 @@ exports.initializeOnlinePayment = async (req, res) => {
             amount: amount,
             description: `Balance top-up for user #${userId}`,
             shopOrderId: orderId,
-            // Use client URL for redirect back to frontend
-            redirectUrl: `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=success&provider=bog`,
+            // Use server URL for redirect (BOG will redirect here, then we redirect to frontend)
+            redirectUrl: `${apiBaseUrl}/api/balance/bog-redirect?orderId=${orderId}`,
             // Specify callback URL for payment notifications
             callbackUrl: `${apiBaseUrl}/api/balance/bog-callback`,
             // Order expiry time in minutes (30 minutes)
@@ -471,6 +471,38 @@ exports.paymentComplete = async (req, res) => {
 };
 
 /**
+ * Handle BOG redirect after payment (receives redirect from BOG)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.handleBogRedirect = async (req, res) => {
+  try {
+    console.log('=== BOG REDIRECT RECEIVED ===');
+    console.log('Request query:', JSON.stringify(req.query, null, 2));
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+
+    // Get orderId from query
+    const orderId = req.query.orderId || req.body.orderId;
+    const status = req.query.status || req.body.status || 'success';
+
+    console.log('Extracted:', { orderId, status });
+
+    // Get frontend URL
+    const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
+    const redirectUrl = `${clientBaseUrl}/profile/balance?orderId=${orderId}&status=${status}&provider=bog`;
+
+    console.log('Redirecting user to:', redirectUrl);
+
+    // Redirect user to frontend
+    return res.redirect(redirectUrl);
+  } catch (error) {
+    console.error('Error handling BOG redirect:', error);
+    const clientBaseUrl = process.env.FRONTEND_URL || 'https://autovend.ge';
+    return res.redirect(`${clientBaseUrl}/profile/balance?error=payment-processing-failed&provider=bog`);
+  }
+};
+
+/**
  * Handle Bank of Georgia payment page (direct redirect to BOG payment page)
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -542,8 +574,10 @@ exports.handleBogPaymentCallback = async (req, res) => {
   const callbackSignature = req.headers['callback-signature'];
   const paymentData = req.body;
   
-  console.log('BOG Callback received:', JSON.stringify(paymentData, null, 2));
+  console.log('=== BOG CALLBACK RECEIVED ===');
+  console.log('BOG Callback body:', JSON.stringify(paymentData, null, 2));
   console.log('BOG Callback signature:', callbackSignature);
+  console.log('BOG Raw body length:', rawBody ? rawBody.length : 'N/A');
   
   try {
     // Immediately acknowledge receipt to meet BOG's requirements
@@ -616,11 +650,15 @@ exports.handleBogPaymentCallback = async (req, res) => {
       if (isSuccess) {
         // Start database transaction
         await client.query('BEGIN');
-        
+
         try {
+          console.log(`Processing successful BOG payment for transaction ${transaction.id}`);
+          console.log(`Amount to add: ${transaction.amount} GEL`);
+          console.log(`User ID: ${transaction.user_id}`);
+
           // Update transaction status to completed
-          await client.query(
-            `UPDATE balance_transactions SET status = 'completed', payment_data = payment_data || $1::jsonb WHERE id = $2`,
+          const updateTxResult = await client.query(
+            `UPDATE balance_transactions SET status = 'completed', payment_data = payment_data || $1::jsonb WHERE id = $2 RETURNING id, status`,
             [JSON.stringify({
               provider: 'bog',
               payment_time: new Date().toISOString(),
@@ -632,17 +670,21 @@ exports.handleBogPaymentCallback = async (req, res) => {
               callback_data: paymentData
             }), transaction.id]
           );
-          
+
+          console.log(`Transaction updated:`, updateTxResult.rows[0]);
+
           // Update user balance
-          await client.query(
-            `UPDATE users SET balance = balance + $1 WHERE id = $2`,
+          const updateBalanceResult = await client.query(
+            `UPDATE users SET balance = balance + $1 WHERE id = $2 RETURNING balance`,
             [transaction.amount, transaction.user_id]
           );
-          
+
+          console.log(`User balance updated. New balance: ${updateBalanceResult.rows[0]?.balance} GEL`);
+
           // Commit transaction
           await client.query('COMMIT');
-          
-          console.log(`BOG Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
+
+          console.log(`✅ BOG Payment successful: Added ${transaction.amount} GEL to user ${transaction.user_id}`);
         } catch (dbError) {
           // Rollback transaction on database error
           await client.query('ROLLBACK');
