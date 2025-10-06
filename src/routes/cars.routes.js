@@ -757,13 +757,14 @@ router.get('/', async (req, res) => {
     
     // Create main query with sorting and pagination
     const query = `
-      SELECT c.*, 
-        b.name as brand_name, 
+      SELECT c.*,
+        b.name as brand_name,
         cat.name as category_name,
-        u.id as seller_id,
+        c.seller_id,
+        u.id as user_id,
         loc.city, loc.country,
         c.author_name, c.author_phone,
-        spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage, 
+        spec.engine_type, spec.transmission, spec.fuel_type, spec.mileage,
         spec.engine_size, spec.steering_wheel, spec.cylinders, spec.airbags_count,
         spec.drive_type, spec.interior_material, spec.interior_color, spec.color,
         c.color_highlighting_enabled, c.color_highlighting_expiration_date,
@@ -808,7 +809,8 @@ router.get('/', async (req, res) => {
         title: car.title, // დავამატეთ title ველი
         year: car.year,
         price: car.price,
-        seller_id: car.seller_id,
+        seller_id: car.seller_id, // Keep the actual seller_id from cars table
+        user_id: car.user_id, // Also include user_id from the join if needed
         author_name: car.author_name,
         author_phone: car.author_phone,
         description_ka: car.description_ka,
