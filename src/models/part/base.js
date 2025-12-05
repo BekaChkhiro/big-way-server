@@ -230,10 +230,16 @@ class PartModel {
   static async delete(id) {
     // First, delete all images associated with the part
     await pool.query('DELETE FROM part_images WHERE part_id = $1', [id]);
-    
+
     // Then delete the part
     const result = await pool.query('DELETE FROM parts WHERE id = $1 RETURNING *', [id]);
     return result.rows[0];
+  }
+
+  static async incrementViews(id) {
+    const query = 'UPDATE parts SET views_count = views_count + 1 WHERE id = $1 RETURNING views_count';
+    const result = await pool.query(query, [id]);
+    return result.rows[0]?.views_count || 0;
   }
 }
 

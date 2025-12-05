@@ -11,6 +11,8 @@ router.get('/models/by-brand/:brandId', PartsController.getModelsByBrand.bind(Pa
 router.get('/categories/all', PartsController.getCategories.bind(PartsController));
 router.get('/part-categories/all', PartsController.getPartCategories.bind(PartsController));
 router.get('/user/:userId', PartsController.getByUserId.bind(PartsController));
+// Increment view count for a part
+router.post('/:id/views', PartsController.incrementViews.bind(PartsController));
 // This needs to be last to avoid conflicts with specific routes
 router.get('/:id', PartsController.getById.bind(PartsController));
 

@@ -601,6 +601,25 @@ class PartsController {
     }
   }
 
+  // Increment view count for a part
+  async incrementViews(req, res) {
+    try {
+      const { id } = req.params;
+      const viewsCount = await PartModel.incrementViews(id);
+
+      res.status(200).json({
+        success: true,
+        views_count: viewsCount
+      });
+    } catch (error) {
+      console.error('Error incrementing part views:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
   // Purchase VIP status for a part using balance
   async purchaseVipStatus(req, res) {
     const { partId, vipStatus, days, colorHighlighting, colorHighlightingDays, autoRenewal, autoRenewalDays } = req.body;
