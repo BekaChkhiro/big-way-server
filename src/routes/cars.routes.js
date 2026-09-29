@@ -556,14 +556,19 @@ router.put('/:id', authMiddleware, carUpload.array('images', 10), async (req, re
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    await CarUpdate.delete(parseInt(id), req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    await CarUpdate.delete(parseInt(id), req.user.id, isAdmin);
     res.status(200).json({
       success: true,
       message: 'Car deleted successfully'
     });
   } catch (error) {
     console.error('Error deleting car:', error);
-    res.status(500).json({
+    // These are client errors; reporting them as 500 hides what went wrong.
+    const status = error.message === 'Car not found' ? 404
+      : error.message === 'Unauthorized to modify this car' ? 403
+      : 500;
+    res.status(status).json({
       success: false,
       error: error.message || 'Internal server error'
     });

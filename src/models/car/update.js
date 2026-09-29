@@ -229,12 +229,12 @@ class CarUpdate {
     }
   }
 
-  static async delete(id, sellerId) {
+  static async delete(id, sellerId, isAdmin = false) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      await CarValidation.validateOwnership(client, id, sellerId);
+      await CarValidation.validateOwnership(client, id, sellerId, isAdmin);
 
       // Get all image URLs before deletion
       const imageResult = await client.query(

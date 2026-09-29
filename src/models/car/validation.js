@@ -214,17 +214,22 @@ class CarValidation {
     };
   }
 
-  static async validateOwnership(client, carId, sellerId) {
+  static async validateOwnership(client, carId, sellerId, isAdmin = false) {
     const carCheck = await client.query(
       'SELECT seller_id FROM cars WHERE id = $1',
       [carId]
     );
-    
+
     // Check if car exists
     if (carCheck.rows.length === 0) {
       throw new Error('Car not found');
     }
-    
+
+    // Admin may modify any car, but it still has to exist
+    if (isAdmin) {
+      return;
+    }
+
     // Check if user is authorized to modify this car
     if (carCheck.rows[0].seller_id !== sellerId) {
       throw new Error('Unauthorized to modify this car');
